@@ -3,11 +3,21 @@ import { MongoClient, ServerApiVersion } from "mongodb";
 const uri = process.env.MONGODB_URI;
 if (!uri) throw new Error("Please define the MONGODB_URI environment variable");
 
+// extend global object with custom type
 declare global {
-  var _mongoClientPromise: Promise<MongoClient> | undefined;
+  //interface to declare the type
+  namespace NodeJS {
+    interface Global {
+      _mongoClientPromise?: Promise<MongoClient>;
+    }
+  }
 }
 
-if (!global._mongoClientPromise) {
+const globalForMongo = global as typeof globalThis & {
+  _mongoClientPromise?: Promise<MongoClient>;
+};
+
+if (!globalForMongo._mongoClientPromise) {
   const client = new MongoClient(uri, {
     serverApi: {
       version: ServerApiVersion.v1,
@@ -15,9 +25,9 @@ if (!global._mongoClientPromise) {
       deprecationErrors: true,
     },
   });
-  global._mongoClientPromise = client.connect();
+  globalForMongo._mongoClientPromise = client.connect();
 }
 
-const clientPromise = global._mongoClientPromise;
+const clientPromise = globalForMongo._mongoClientPromise!;
 
 export default clientPromise;
