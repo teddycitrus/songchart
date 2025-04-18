@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "level max rule",
-  description: "choir songs data crap idk",
+  description: "choir songlist crap idk"
 };
 
 export default function RootLayout({
