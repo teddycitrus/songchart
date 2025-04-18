@@ -4,7 +4,17 @@ import { useEffect, useState } from "react";
 import Image from 'next/image';
 
 export default function Home() {
-    const [songs, setSongs] = useState<any[]>([]);
+    type Song = {
+      name: "",
+      chords: "",
+      key: "",
+      transpose: "",
+      capo: "",
+      bpm: "",
+      beat: ""
+    }
+
+    const [songs, setSongs] = useState<Song[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
     const [loading2, setLoading2] = useState<string>("no");
     const [error, setError] = useState<string | null>(null);
@@ -15,9 +25,9 @@ export default function Home() {
         name: "",
         chords: "",
         key: "",
-        transpose: 0,
+        transpose: "",
         capo: "",
-        bpm: 0,
+        bpm: "",
         beat: ""
       });
 
@@ -74,8 +84,12 @@ export default function Home() {
 
         const data = await response.json();
         setSongs(data);
-      } catch (err: any) {
-        setError(err.message);
+      } catch (err: unknown) {
+        if (err instanceof Error) {
+          setError(err.message);
+        } else {
+          setError("An unknown error occurred");
+        }
       } finally {
         setLoading(false);
       }
