@@ -85,4 +85,3 @@ Project developed in **April 2025** to support church choir organization and red
 * No more heated arguments trying to remember the configurations for a song
 * Instantly accessible songs across any key
 * Simplifies communication and set planning
-```
