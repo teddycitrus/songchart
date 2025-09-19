@@ -338,7 +338,7 @@ export default function Home() {
         <form className="container" onSubmit={handleUpdate}>
           <div className="form-group">
             <label htmlFor="name">Title</label><br />
-            <input required type="text" id="name" defaultValue={selectedSong?.name} onChange={handleChange} />
+            <input required type="text" id="name" defaultValue={selectedSong?.name} readOnly />
           </div>
           <div className="form-group">
             <label htmlFor="chords">Chords/Lyrics (URL)</label><br />
