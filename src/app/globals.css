@@ -59,6 +59,11 @@ h1, h2, h3, th, tr, td, Link, button, label {
   font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans", Ubuntu, Cantarell, "Helvetica Neue", Oxygen, "Open Sans", sans-serif;
 }
 
+input[readonly] {
+  background-color: #f3f3f3;
+  cursor: not-allowed;
+}
+
 .highlight {
   color: rgb(0, 0, 0);
   font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans", Ubuntu, Cantarell, "Helvetica Neue", Oxygen, "Open Sans", sans-serif;
