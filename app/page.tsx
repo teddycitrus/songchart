@@ -45,8 +45,6 @@ export default function Home() {
         beat: ""
       });
 
-    const pswd = process.env.AUTH_PASS ?? "";
-
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {   //used in both the Add form and the Edit form
         setFormData({ ...formData, [e.target.id]: e.target.value });
     };
@@ -164,18 +162,24 @@ export default function Home() {
     fetchSongs();
   }, []);
 
-  const checkAuth = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const input = e.currentTarget.elements.namedItem("auth") as HTMLInputElement;
+  const checkAuth = async (e: React.FormEvent<HTMLFormElement>) => {
+  e.preventDefault();
+  const input = e.currentTarget.elements.namedItem("auth") as HTMLInputElement;
 
-    console.log("footer auth attempted; input =", input.value);
+  const res = await fetch("/api/checkAuth", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ password: input.value }),
+  });
 
-    if (input.value === pswd) {
-      authed(true);
-    } else {
-      alert("wrong password pottan");
-    }
-  };
+  const data = await res.json();
+
+  if (data.ok) {
+    authed(true);
+  } else {
+    alert("wrong password pottan");
+  }
+};
 
   let content;
 
