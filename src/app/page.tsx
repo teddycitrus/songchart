@@ -82,7 +82,7 @@ export default function Home() {
                 console.log("Unknown error", err);
               }
           } finally {
-            window.location.reload(); //refreshes page
+            window.location.reload(); //refreshes page so that new entry is visible
           }
         }
     }
