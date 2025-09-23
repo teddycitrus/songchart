@@ -45,6 +45,8 @@ export default function Home() {
         beat: ""
       });
 
+    const pswd = process.env.AUTH_PASS ?? "";
+
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {   //used in both the Add form and the Edit form
         setFormData({ ...formData, [e.target.id]: e.target.value });
     };
@@ -174,8 +176,6 @@ export default function Home() {
       alert("wrong password pottan");
     }
   };
-
-  const pswd = process.env.AUTH_PASS as string;
 
   let content;
 
