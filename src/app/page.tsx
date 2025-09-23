@@ -168,12 +168,14 @@ export default function Home() {
 
     console.log("footer auth attempted; input =", input.value);
 
-    if (input.value === "Kairos>Johnabum") {
+    if (input.value === pswd) {
       authed(true);
     } else {
       alert("wrong password pottan");
     }
   };
+
+  const pswd = process.env.AUTH_PASS as string;
 
   let content;
 
