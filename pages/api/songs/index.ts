@@ -22,8 +22,8 @@ export default async function fetchSongs(req: NextApiRequest, res: NextApiRespon
     const collection = db.collection("music");
     console.log("connected to collection");
 
-    // Fetch all songs from the collection
-    const songs = await collection.find({}).toArray();
+    // Fetch all songs from the collection, in case-insensitive alphabetical order by name
+    const songs = await collection.find({}).collation({ locale: "en", strength: 2 }).sort({ name: 1 }).toArray();
 
     if (!songs || songs.length === 0) {
       return res.status(200).json({ message: "No songs found" });  // error handling ig
