@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Image from 'next/image';
-import { Song } from "../../types/Song";
+import { Song } from "../types/Song";
 
 export default function Home() {
     /* type Song = {
