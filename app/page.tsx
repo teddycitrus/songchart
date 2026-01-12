@@ -202,7 +202,7 @@ export default function Home() {
   } else if (edit) { //editable rows
     content = (<div> <br />
         <table
-        style={{ fontSize: "16px", textAlign: "center", maxWidth: "800px" }}
+        style={{ fontSize: "min(3vw, 16px)", textAlign: "center", maxWidth: "800px" }}
         id="ediTable"
         >
         <thead>
