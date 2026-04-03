@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "level max rule",
-  description: "choir songlist crap idk"
+  title: "Song Database",
+  description: "Choir song repertoire manager"
 };
 
 export default function RootLayout({
@@ -13,11 +13,8 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>
-      <div className="wrapper">
-          <div className="el" />
-          {children}
-        </div>
+      <body className="bg-[#0a0a0a] min-h-screen">
+        {children}
       </body>
     </html>
   );

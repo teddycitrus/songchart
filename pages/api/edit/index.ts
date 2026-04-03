@@ -23,11 +23,11 @@ export default async function addSong(req: NextApiRequest, res: NextApiResponse)
     console.log("connected to music coll");
 
     //breakdown json object from frontend annotate page
-    const { name, chords, key, transpose, capo, bpm, beat } = req.body;
+    const { name, chords, key, transpose, capo, bpm, beat, type, usage_counter } = req.body;
     console.log("song data from frontend:", {
-      name, chords, key, transpose, capo, bpm, beat
+      name, chords, key, transpose, capo, bpm, beat, type, usage_counter
     });
-    
+
     // add a song
     const song = {
       name: name,
@@ -36,7 +36,9 @@ export default async function addSong(req: NextApiRequest, res: NextApiResponse)
       transpose: transpose,
       capo: capo,
       bpm: bpm,
-      beat: beat
+      beat: beat,
+      type: Array.isArray(type) ? type : [],
+      usage_counter: typeof usage_counter === "number" ? usage_counter : 0,
     }
 
     console.log("final song object:", song);

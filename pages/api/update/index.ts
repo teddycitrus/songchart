@@ -1,6 +1,6 @@
 
+import { ObjectId } from "mongodb";
 import clientPromise from "../../../lib/mongodb";
-//import { Song } from "../../types/Song";
 import type { NextApiRequest, NextApiResponse } from "next";
 
 
@@ -24,9 +24,9 @@ export default async function updateSong(req: NextApiRequest, res: NextApiRespon
     console.log("connected to music coll");
 
     //breakdown json object from frontend annotate page
-    const { name, chords, key, transpose, capo, bpm, beat, id } = req.body;
+    const { name, chords, key, transpose, capo, bpm, beat, type, usage_counter, _id } = req.body;
     console.log("song data from frontend:", {
-      name, chords, key, transpose, capo, bpm, beat, id
+      name, chords, key, transpose, capo, bpm, beat, type, usage_counter, _id
     });
 
     // update a song
@@ -37,13 +37,15 @@ export default async function updateSong(req: NextApiRequest, res: NextApiRespon
       transpose: transpose,
       capo: capo,
       bpm: bpm,
-      beat: beat
+      beat: beat,
+      type: Array.isArray(type) ? type : [],
+      usage_counter: typeof usage_counter === "number" ? usage_counter : 0,
     }
 
     console.log("final song object:", songToUpdate);
-    console.log("song id: ", id);
+    console.log("song id: ", _id);
 
-    const result = await myColl.updateOne({ name: songToUpdate.name }, { $set: songToUpdate });
+    const result = await myColl.updateOne({ _id: new ObjectId(_id) }, { $set: songToUpdate });
     res.status(201).json({ message: "Song updated successfully", id: result.upsertedId });
   } catch (error: unknown) {
     if (error instanceof Error) {  //error is an instance of Error
