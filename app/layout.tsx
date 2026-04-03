@@ -10,8 +10,8 @@ const playfair = Playfair_Display({
 });
 
 export const metadata: Metadata = {
-  title: "Song Database",
-  description: "Choir song repertoire manager"
+  title: "SongChart",
+  description: "A song repertoire manager for the SACM Youth Choir"
 };
 
 export default function RootLayout({
