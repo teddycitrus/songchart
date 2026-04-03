@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ChevronDown, ChevronUp, ExternalLink, Lock,
   Pencil, Plus, Search, Shuffle, Trash2, X
@@ -231,6 +231,8 @@ export default function Home() {
   const [submitError, setSubmitError] = useState("");
   const [deleteError, setDeleteError] = useState("");
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
+  const [showCredits, setShowCredits] = useState(false);
+  const creditsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showRepertoireModal, setShowRepertoireModal] = useState(false);
   const [repertoire, setRepertoire] = useState<{ entrance: Song; communion: Song; recessional: Song } | null>(null);
   const [repertoireError, setRepertoireError] = useState("");
@@ -640,8 +642,9 @@ export default function Home() {
 
       {/* Header */}
       <div className="px-6 py-4 border-b border-[#262626] flex items-center justify-between">
-        <h1 className="text-white text-sm font-semibold tracking-tight">SongChart</h1>
-        <p className="text-white text-sm tracking-tight">made by john mannully for the SACM Youth Choir</p>
+        <div className="flex flex-col items-center gap-2">
+          <h1 className="text-white italic text-3xl font-semibold tracking-tight"
+              style={{ fontFamily: '"PP Editorial New", "Times New Roman", serif' }}>SongChart</h1>        </div>
         <div className="flex items-center gap-2">
           {auth && (
             <button
@@ -778,6 +781,65 @@ export default function Home() {
             </tr>
           </tfoot>
         </table>
+      </div>
+
+      {/* Footer */}
+      <div className="fixed bottom-0 inset-x-0 z-40 flex justify-center pb-4 pointer-events-none">
+        <p
+          className="text-[11px] text-[#3f3f46] tracking-wide"
+          style={{ fontFamily: "var(--font-playfair), Georgia, serif" }}
+        >
+          made by{" "}
+          <span
+            className="relative inline-block pointer-events-auto"
+            onMouseEnter={() => {
+              if (creditsTimer.current) clearTimeout(creditsTimer.current);
+              setShowCredits(true);
+            }}
+            onMouseLeave={() => {
+              creditsTimer.current = setTimeout(() => setShowCredits(false), 2000);
+            }}
+          >
+            {/* Speech bubble */}
+            <span
+              className={`absolute bottom-full left-1/2 -translate-x-1/2 mb-2.5 w-64 transition-opacity duration-150 ease-in-out pointer-events-auto ${showCredits ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+              onMouseEnter={() => {
+                if (creditsTimer.current) clearTimeout(creditsTimer.current);
+              }}
+              onMouseLeave={() => {
+                creditsTimer.current = setTimeout(() => setShowCredits(false), 2000);
+              }}
+            >
+              <span className="block bg-[#1a1a1a] border border-[#262626] rounded-md px-3 py-2.5 text-left shadow-lg">
+                <span className="block text-[#a1a1aa] text-[10px] leading-relaxed" style={{ fontFamily: "var(--font-playfair), Georgia, serif", fontStyle: "normal" }}>
+                  ZERO contributions of ANY sort were made by the following individuals:
+                </span>
+                <span className="block mt-1.5 space-y-0.5 text-[10px]" style={{ fontFamily: "var(--font-playfair), Georgia, serif", fontStyle: "normal" }}>
+                  <span className="block text-[#71717a]">
+                    -{" "}
+                    <a href="https://www.linkedin.com/in/anvin-siby-6004a1310/" target="_blank" rel="noopener noreferrer" className={`text-[#a1a1aa] underline underline-offset-2 hover:text-white ${TX}`}>
+                      anvin siby
+                    </a>
+                  </span>
+                  <span className="block text-[#71717a]">
+                    -{" "}
+                    <a href="https://www.linkedin.com/in/joel-joseph-369399344/" target="_blank" rel="noopener noreferrer" className={`text-[#a1a1aa] underline underline-offset-2 hover:text-white ${TX}`}>
+                      joel joseph
+                    </a>
+                  </span>
+                </span>
+              </span>
+              <span className="block w-0 h-0 mx-auto border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-[#262626]" />
+            </span>
+            <span
+              className="italic cursor-default"
+              style={{ fontFamily: '"PP Editorial New", "Times New Roman", serif' }}
+            >
+              john mannully
+            </span>
+          </span>
+          {" "}for the SACM youth choir
+        </p>
       </div>
 
     </div>
