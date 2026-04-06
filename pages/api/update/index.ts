@@ -24,14 +24,15 @@ export default async function updateSong(req: NextApiRequest, res: NextApiRespon
     console.log("connected to music coll");
 
     //breakdown json object from frontend annotate page
-    const { name, chords, key, transpose, capo, bpm, beat, type, usage_counter, _id } = req.body;
+    const { name, listen, chords, key, transpose, capo, bpm, beat, type, usage_counter, lyrics, _id } = req.body;
     console.log("song data from frontend:", {
-      name, chords, key, transpose, capo, bpm, beat, type, usage_counter, _id
+      name, listen, chords, key, transpose, capo, bpm, beat, type, usage_counter, lyrics, _id
     });
 
     // update a song
     const songToUpdate = {
       name: name,
+      listen: typeof listen === "string" ? listen : "",
       chords: chords,
       key: key,
       transpose: transpose,
@@ -40,6 +41,7 @@ export default async function updateSong(req: NextApiRequest, res: NextApiRespon
       beat: beat,
       type: Array.isArray(type) ? type : [],
       usage_counter: typeof usage_counter === "number" ? usage_counter : 0,
+      lyrics: typeof lyrics === "string" ? lyrics : "",
     }
 
     console.log("final song object:", songToUpdate);

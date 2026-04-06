@@ -45,7 +45,9 @@ const BTN_DANGER =
 
 const COLUMNS: { key: keyof Song; label: string; sortable: boolean }[] = [
   { key: "name",      label: "Song",      sortable: true  },
+  { key: "listen",    label: "Video",    sortable: false },
   { key: "chords",    label: "Chords",    sortable: false },
+  { key: "lyrics",    label: "Lyrics",    sortable: false },
   { key: "key",       label: "Key",       sortable: true  },
   { key: "transpose", label: "Transpose", sortable: true  },
   { key: "capo",      label: "Capo",      sortable: true  },
@@ -55,10 +57,11 @@ const COLUMNS: { key: keyof Song; label: string; sortable: boolean }[] = [
 ];
 
 const EMPTY_FORM = {
-  name: "", chords: "", key: "", transpose: "",
+  name: "", listen: "", chords: "", key: "", transpose: "",
   capo: "", bpm: "", beat: "",
   type: [] as string[],
   usage_counter: 0,
+  lyrics: "",
 };
 
 type FormData = typeof EMPTY_FORM;
@@ -156,12 +159,30 @@ function SongFormBody({
       </div>
 
       <div>
+        <label className="text-[#18181b] text-sm font-medium">Video URL</label>
+        <input
+          type="url" id="listen" className={INPUT_CLS}
+          value={formData.listen} onChange={onChangeText} placeholder="https://..."
+        />
+      </div>
+
+      <div>
         <label className="text-[#18181b] text-sm font-medium">
-          Chords / Lyrics URL<span className="text-red-500 ml-0.5">*</span>
+          Chords URL<span className="text-red-500 ml-0.5">*</span>
         </label>
         <input
           required type="url" id="chords" className={INPUT_CLS}
           value={formData.chords} onChange={onChangeText} placeholder="https://..."
+        />
+      </div>
+
+      <div>
+        <label className="text-[#18181b] text-sm font-medium">
+          Lyrics URL<span className="text-red-500 ml-0.5">*</span>
+        </label>
+        <input
+          required type="url" id="lyrics" className={INPUT_CLS}
+          value={formData.lyrics} onChange={onChangeText} placeholder="https://..."
         />
       </div>
 
@@ -255,10 +276,11 @@ export default function Home() {
   useEffect(() => {
     if (selectedSong) {
       setFormData({
-        name: selectedSong.name, chords: selectedSong.chords,
-        key: selectedSong.key, transpose: selectedSong.transpose,
+        name: selectedSong.name, listen: selectedSong.listen ?? "",
+        chords: selectedSong.chords, key: selectedSong.key, transpose: selectedSong.transpose,
         capo: selectedSong.capo, bpm: selectedSong.bpm, beat: selectedSong.beat,
         type: selectedSong.type ?? [], usage_counter: selectedSong.usage_counter ?? 0,
+        lyrics: selectedSong.lyrics ?? "",
       });
     }
   }, [selectedSong]);
@@ -463,8 +485,8 @@ export default function Home() {
       {showAuthModal && (
         <ModalOverlay onClose={() => { setShowAuthModal(false); setAuthError(""); setPendingAction(null); }}>
           <ModalPanel
-            title="Sign in"
-            subtitle="Enter the admin password to continue."
+            title="sign in"
+            subtitle="oooopen sesame"
             size="sm"
             onClose={() => { setShowAuthModal(false); setAuthError(""); setPendingAction(null); }}
           >
@@ -563,8 +585,8 @@ export default function Home() {
       {showEditModal && selectedSong && (
         <ModalOverlay onClose={() => { if (!submitting) { setShowEditModal(false); setSelectedSong(null); setSubmitError(""); } }}>
           <ModalPanel
-            title="Edit song"
-            subtitle={selectedSong.name}
+            title="edit song"
+            subtitle="you couldn't get it right the first time?"
             onClose={() => { if (!submitting) { setShowEditModal(false); setSelectedSong(null); setSubmitError(""); } }}
           >
             <form onSubmit={handleUpdate} className="flex flex-col">
@@ -643,8 +665,7 @@ export default function Home() {
       {/* Header */}
       <div className="px-6 py-4 border-b border-[#262626] flex items-center justify-between">
         <div className="flex flex-col items-center gap-2">
-          <h1 className="text-white italic text-3xl font-semibold tracking-tight"
-              style={{ fontFamily: '"PP Editorial New", "Times New Roman", serif' }}>SongChart</h1>        </div>
+          <h1 className="text-white italic text-3xl font-semibold tracking-tight">SongChart</h1>        </div>
         <div className="flex items-center gap-2">
           {auth && (
             <button
@@ -723,9 +744,31 @@ export default function Home() {
                 <tr key={song._id} className={`border-b border-[#1a1a1a] hover:bg-[#141414] group ${TX}`}>
                   <td className="px-4 py-3 text-white font-medium whitespace-nowrap">{song.name}</td>
                   <td className="px-4 py-3">
+                    {song.listen ? (
+                      <a
+                        href={song.listen} target="_blank" rel="noopener noreferrer"
+                        className={`inline-flex items-center gap-1 text-xs text-[#71717a] hover:text-[#a1a1aa] ${TX}`}
+                        onClick={e => e.stopPropagation()}
+                      >
+                        <ExternalLink size={12} /> open
+                      </a>
+                    ) : <span className="text-[#3f3f46]">—</span>}
+                  </td>
+                  <td className="px-4 py-3">
                     {song.chords ? (
                       <a
                         href={song.chords} target="_blank" rel="noopener noreferrer"
+                        className={`inline-flex items-center gap-1 text-xs text-[#71717a] hover:text-[#a1a1aa] ${TX}`}
+                        onClick={e => e.stopPropagation()}
+                      >
+                        <ExternalLink size={12} /> open
+                      </a>
+                    ) : <span className="text-[#3f3f46]">—</span>}
+                  </td>
+                  <td className="px-4 py-3">
+                    {song.lyrics ? (
+                      <a
+                        href={song.lyrics} target="_blank" rel="noopener noreferrer"
                         className={`inline-flex items-center gap-1 text-xs text-[#71717a] hover:text-[#a1a1aa] ${TX}`}
                         onClick={e => e.stopPropagation()}
                       >
