@@ -5,3 +5,31 @@
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: #141414; }
 ::-webkit-scrollbar-thumb { background: #262626; border-radius: 3px; }
+
+/* Styling for DOCX rendered by mammoth inside the file viewer.
+   Mammoth emits clean, basic HTML — we just give it readable defaults. */
+.docx-rendered {
+  color: #18181b;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 15px;
+  line-height: 1.65;
+}
+.docx-rendered h1 { font-size: 1.75rem; font-weight: 700; margin: 1.25rem 0 0.75rem; }
+.docx-rendered h2 { font-size: 1.4rem;  font-weight: 700; margin: 1.1rem  0 0.6rem;  }
+.docx-rendered h3 { font-size: 1.15rem; font-weight: 600; margin: 1rem    0 0.5rem;  }
+.docx-rendered p  { margin: 0.5rem 0; }
+.docx-rendered ul { list-style: disc;    margin: 0.5rem 0 0.5rem 1.5rem; }
+.docx-rendered ol { list-style: decimal; margin: 0.5rem 0 0.5rem 1.5rem; }
+.docx-rendered li { margin: 0.15rem 0; }
+.docx-rendered strong { font-weight: 700; }
+.docx-rendered em { font-style: italic; }
+.docx-rendered table { border-collapse: collapse; margin: 0.75rem 0; }
+.docx-rendered th, .docx-rendered td { border: 1px solid #e4e4e7; padding: 0.35rem 0.6rem; }
+.docx-rendered a { color: #2563eb; text-decoration: underline; }
+.docx-rendered img { max-width: 100%; height: auto; }
+
+/* Dark-mode variant for the in-viewer reader toggle. Same layout, inverted palette. */
+.docx-rendered-dark { color: #e4e4e7; }
+.docx-rendered-dark th,
+.docx-rendered-dark td { border-color: #262626; }
+.docx-rendered-dark a { color: #60a5fa; }

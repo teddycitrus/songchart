@@ -1,6 +1,9 @@
 
 import { ObjectId } from "mongodb";
 import clientPromise from "../../../lib/mongodb";
+import { deleteFile } from "../../../lib/b2";
+import { rateLimit, getClientIp } from "../../../lib/rateLimit";
+import { verifyToken, bearerFromHeader } from "../../../lib/auth";
 import type { NextApiRequest, NextApiResponse } from "next";
 
 
@@ -9,27 +12,41 @@ export default async function updateSong(req: NextApiRequest, res: NextApiRespon
     return res.status(405).json({ message: "Method not allowed" });
   }
 
+  const ip = getClientIp(req.headers);
+  const rl = rateLimit(`update:${ip}`, 60, 5 * 60 * 1000);
+  if (!rl.allowed) {
+    res.setHeader("Retry-After", String(rl.retryAfterSec ?? 60));
+    return res.status(429).json({ message: "Rate limit exceeded" });
+  }
+
+  const token = bearerFromHeader(req.headers.authorization);
+  if (!verifyToken(token)) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+
   try {
-    // Connect to MongoDB
     console.log("attempting to connect to mongo")
     const client = await clientPromise;
     console.log("Connected to MongoDB");
 
-    // Select the database and collection
-    console.log("attempting to connect to songs db");
     const db = client.db("songs");
-    console.log("connected to songs db");
-    console.log("attempting to connect to music coll");
     const myColl = db.collection("music");
-    console.log("connected to music coll");
 
-    //breakdown json object from frontend annotate page
-    const { name, listen, chords, key, transpose, capo, bpm, beat, type, usage_counter, lyrics, _id } = req.body;
-    console.log("song data from frontend:", {
-      name, listen, chords, key, transpose, capo, bpm, beat, type, usage_counter, lyrics, _id
-    });
+    const {
+      name, listen, chords, key, transpose, capo, bpm, beat,
+      type, usage_counter, lyrics, chordsFile, lyricsFile, _id,
+    } = req.body;
 
-    // update a song
+    if (!_id || typeof _id !== "string") {
+      return res.status(400).json({ message: "_id required" });
+    }
+
+    // Fetch existing so we know which files (if any) were just replaced.
+    const existing = await myColl.findOne({ _id: new ObjectId(_id) });
+    if (!existing) {
+      return res.status(404).json({ message: "Song not found" });
+    }
+
     const songToUpdate = {
       name: name,
       listen: typeof listen === "string" ? listen : "",
@@ -42,19 +59,31 @@ export default async function updateSong(req: NextApiRequest, res: NextApiRespon
       type: Array.isArray(type) ? type : [],
       usage_counter: typeof usage_counter === "number" ? usage_counter : 0,
       lyrics: typeof lyrics === "string" ? lyrics : "",
+      chordsFile: typeof chordsFile === "string" ? chordsFile : "",
+      lyricsFile: typeof lyricsFile === "string" ? lyricsFile : "",
     }
 
-    console.log("final song object:", songToUpdate);
-    console.log("song id: ", _id);
-
     const result = await myColl.updateOne({ _id: new ObjectId(_id) }, { $set: songToUpdate });
+
+    // Clean up any replaced/removed B2 files *after* the Mongo write succeeds,
+    // so a failed DB update never strands us without a file.
+    const oldChords = typeof existing.chordsFile === "string" ? existing.chordsFile : "";
+    const oldLyrics = typeof existing.lyricsFile === "string" ? existing.lyricsFile : "";
+    if (oldChords && oldChords !== songToUpdate.chordsFile) {
+      try { await deleteFile("chords", oldChords); }
+      catch (e) { console.error("[update] failed to drop old chords file:", e); }
+    }
+    if (oldLyrics && oldLyrics !== songToUpdate.lyricsFile) {
+      try { await deleteFile("lyrics", oldLyrics); }
+      catch (e) { console.error("[update] failed to drop old lyrics file:", e); }
+    }
+
     res.status(201).json({ message: "Song updated successfully", id: result.upsertedId });
   } catch (error: unknown) {
-    if (error instanceof Error) {  //error is an instance of Error
+    if (error instanceof Error) {
       console.error("Error updating song:", error.message);
       res.status(500).json({ message: "Failed to update song", error: error.message });
     } else {
-      //unexpected error types (gpt recommended it dont ask me)
       console.error("Unexpected error:", error);
       res.status(500).json({ message: "Failed to update song", error: "An unknown error occurred" });
     }

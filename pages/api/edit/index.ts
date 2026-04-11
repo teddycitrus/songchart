@@ -1,5 +1,7 @@
 
 import clientPromise from "../../../lib/mongodb";
+import { rateLimit, getClientIp } from "../../../lib/rateLimit";
+import { verifyToken, bearerFromHeader } from "../../../lib/auth";
 import type { NextApiRequest, NextApiResponse } from "next";
 
 
@@ -8,25 +10,30 @@ export default async function addSong(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ message: "Method not allowed" });
   }
 
+  const ip = getClientIp(req.headers);
+  const rl = rateLimit(`edit:${ip}`, 60, 5 * 60 * 1000);
+  if (!rl.allowed) {
+    res.setHeader("Retry-After", String(rl.retryAfterSec ?? 60));
+    return res.status(429).json({ message: "Rate limit exceeded" });
+  }
+
+  const token = bearerFromHeader(req.headers.authorization);
+  if (!verifyToken(token)) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+
   try {
-    // Connect to MongoDB
     console.log("attempting to connect to mongo")
     const client = await clientPromise;
     console.log("Connected to MongoDB");
 
-    // Select the database and collection
-    console.log("attempting to connect to songs db");
     const db = client.db("songs");
-    console.log("connected to songs db");
-    console.log("attempting to connect to music coll");
     const myColl = db.collection("music");
-    console.log("connected to music coll");
 
-    //breakdown json object from frontend annotate page
-    const { name, listen, chords, key, transpose, capo, bpm, beat, type, usage_counter, lyrics } = req.body;
-    console.log("song data from frontend:", {
-      name, listen, chords, key, transpose, capo, bpm, beat, type, usage_counter, lyrics
-    });
+    const {
+      name, listen, chords, key, transpose, capo, bpm, beat,
+      type, usage_counter, lyrics, chordsFile, lyricsFile,
+    } = req.body;
 
     // add a song
     const song = {
@@ -41,18 +48,17 @@ export default async function addSong(req: NextApiRequest, res: NextApiResponse)
       type: Array.isArray(type) ? type : [],
       usage_counter: typeof usage_counter === "number" ? usage_counter : 0,
       lyrics: typeof lyrics === "string" ? lyrics : "",
+      chordsFile: typeof chordsFile === "string" ? chordsFile : "",
+      lyricsFile: typeof lyricsFile === "string" ? lyricsFile : "",
     }
-
-    console.log("final song object:", song);
 
     const result = await myColl.insertOne(song);
     res.status(201).json({ message: "Song added successfully", id: result.insertedId });
   } catch (error: unknown) {
-    if (error instanceof Error) {  //error is an instance of Error
+    if (error instanceof Error) {
       console.error("Error adding song:", error.message);
       res.status(500).json({ message: "Failed to add song", error: error.message });
     } else {
-      //unexpected error types (gpt recommended it dont ask me)
       console.error("Unexpected error:", error);
       res.status(500).json({ message: "Failed to add song", error: "An unknown error occurred" });
     }
