@@ -621,7 +621,8 @@ export default function Home() {
       setAuth(true);
     }
   }, []);
-
+  let poop = deleteError;
+  console.log(poop);
   // Track whether the table is horizontally scrolled, so the sticky Song
   // column can collapse to a smaller, transparent floating label.
   useEffect(() => {
