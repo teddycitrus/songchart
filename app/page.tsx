@@ -529,7 +529,7 @@ function SongFormBody({
 
       <div>
         <label className="text-white text-sm font-medium">Beat</label>
-        <input id="beat" className={INPUT_CLS} value={formData.beat} onChange={onChangeText} placeholder="4/4" />
+        <input id="beat" className={INPUT_CLS} value={formData.beat} onChange={onChangeText} placeholder="EtherealMovie" />
       </div>
 
       <div>
