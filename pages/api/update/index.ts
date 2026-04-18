@@ -34,7 +34,7 @@ export default async function updateSong(req: NextApiRequest, res: NextApiRespon
 
     const {
       name, listen, chords, key, transpose, capo, bpm, beat,
-      type, usage_counter, lyrics, chordsFile, lyricsFile, _id,
+      type, usage_counter, lyrics, chordsFile, lyricsFile, notes, _id,
     } = req.body;
 
     if (!_id || typeof _id !== "string") {
@@ -61,6 +61,7 @@ export default async function updateSong(req: NextApiRequest, res: NextApiRespon
       lyrics: typeof lyrics === "string" ? lyrics : "",
       chordsFile: typeof chordsFile === "string" ? chordsFile : "",
       lyricsFile: typeof lyricsFile === "string" ? lyricsFile : "",
+      notes: typeof notes === "string" ? notes : "",
     }
 
     const result = await myColl.updateOne({ _id: new ObjectId(_id) }, { $set: songToUpdate });

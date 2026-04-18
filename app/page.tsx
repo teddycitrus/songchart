@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ChevronDown, ChevronUp, ExternalLink, FileText, Link as LinkIcon, Lock,
-  Minus, Moon, Paperclip, Pencil, Plus, Search, Shuffle, Sun, Trash2, Upload, X
+  MessageSquareText, Minus, Moon, Paperclip, Pencil, Plus, Search, Shuffle, Sun, Trash2, Upload, X
 } from "lucide-react";
 import { Song } from "../types/Song";
 
@@ -58,6 +58,7 @@ const COLUMNS: { key: keyof Song; label: string; sortable: boolean }[] = [
   { key: "bpm",       label: "BPM",       sortable: true  },
   { key: "beat",      label: "Beat",      sortable: true  },
   { key: "type",      label: "Type",      sortable: false },
+  { key: "notes",     label: "Notes",     sortable: false },
 ];
 
 const EMPTY_FORM = {
@@ -68,6 +69,7 @@ const EMPTY_FORM = {
   lyrics: "",
   chordsFile: "",
   lyricsFile: "",
+  notes: "",
 };
 
 type FormData = typeof EMPTY_FORM;
@@ -435,7 +437,7 @@ function SongFormBody({
   formData: FormData;
   readOnlyName?: boolean;
   submitError: string;
-  onChangeText: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onChangeText: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
   onTypeToggle: (t: string, checked: boolean) => void;
   chordsFileUpload: File | null;
   lyricsFileUpload: File | null;
@@ -549,6 +551,18 @@ function SongFormBody({
         </div>
       </div>
 
+      <div>
+        <label className="text-white text-sm font-medium">Notes</label>
+        <textarea
+          id="notes"
+          className={INPUT_CLS + " resize-y min-h-[60px]"}
+          value={formData.notes}
+          onChange={onChangeText}
+          placeholder="Any extra info about this song..."
+          rows={3}
+        />
+      </div>
+
       {submitError && (
         <p className={ERR_BOX}>{submitError}</p>
       )}
@@ -582,13 +596,14 @@ export default function Home() {
   const [sourceChooser, setSourceChooser] = useState<{ kind: "chords" | "lyrics"; song: Song } | null>(null);
   // File viewer modal — full-screen iframe pointed at /api/files/[kind]/[id]
   const [fileViewer, setFileViewer] = useState<{ kind: "chords" | "lyrics"; fileName: string; songName: string } | null>(null);
+  // Notes viewer modal — shows plain-text notes for a song.
+  const [notesViewer, setNotesViewer] = useState<Song | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [deleteError, setDeleteError] = useState("");
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
   const [showCredits, setShowCredits] = useState(false);
-  const creditsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showRepertoireModal, setShowRepertoireModal] = useState(false);
   const [repertoire, setRepertoire] = useState<{ entrance: Song; communion: Song; recessional: Song } | null>(null);
   const [repertoireError, setRepertoireError] = useState("");
@@ -673,6 +688,7 @@ export default function Home() {
         lyrics: selectedSong.lyrics ?? "",
         chordsFile: selectedSong.chordsFile ?? "",
         lyricsFile: selectedSong.lyricsFile ?? "",
+        notes: selectedSong.notes ?? "",
       });
     }
   }, [selectedSong]);
@@ -694,7 +710,7 @@ export default function Home() {
     else { setSortKey(key); setSortDir("asc"); }
   }
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) =>
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setFormData(prev => ({ ...prev, [e.target.id]: e.target.value }));
 
   const handleTypeToggle = (t: string, checked: boolean) =>
@@ -1198,6 +1214,27 @@ export default function Home() {
         );
       })()}
 
+      {/* Notes viewer modal */}
+      {notesViewer && (
+        <ModalOverlay onClose={() => setNotesViewer(null)}>
+          <ModalPanel
+            title="Notes"
+            subtitle={notesViewer.name}
+            size="sm"
+            onClose={() => setNotesViewer(null)}
+          >
+            <div className="px-6 py-5">
+              <p className="text-[#a1a1aa] text-sm whitespace-pre-wrap">{notesViewer.notes || "No notes."}</p>
+            </div>
+            <ModalFooter>
+              <button type="button" onClick={() => setNotesViewer(null)} className={BTN_GHOST}>
+                Close
+              </button>
+            </ModalFooter>
+          </ModalPanel>
+        </ModalOverlay>
+      )}
+
       {/* File viewer — full-screen. PDFs render natively via <iframe>;
           .docx is converted to HTML client-side by mammoth (DocxViewer). */}
       {fileViewer && (() => {
@@ -1404,6 +1441,17 @@ export default function Home() {
                     </div>
                   </td>
                   <td className="px-4 py-3">
+                    {song.notes ? (
+                      <button
+                        type="button"
+                        onClick={e => { e.stopPropagation(); setNotesViewer(song); }}
+                        className={`inline-flex items-center gap-1 text-xs text-[#71717a] hover:text-[#a1a1aa] ${TX}`}
+                      >
+                        <MessageSquareText size={12} /> view
+                      </button>
+                    ) : <span className="text-[#3f3f46]">—</span>}
+                  </td>
+                  <td className="px-4 py-3">
                     <div className={`flex gap-0.5 opacity-0 group-hover:opacity-100 ${TX}`}>
                       <button
                         onClick={() => requireAuth(() => { setSelectedSong(song); setShowEditModal(true); })}
@@ -1447,23 +1495,14 @@ export default function Home() {
           made by{" "}
           <span
             className="relative inline-block pointer-events-auto"
-            onMouseEnter={() => {
-              if (creditsTimer.current) clearTimeout(creditsTimer.current);
-              setShowCredits(true);
-            }}
-            onMouseLeave={() => {
-              creditsTimer.current = setTimeout(() => setShowCredits(false), 2000);
-            }}
+            onMouseEnter={() => setShowCredits(true)}
+            onMouseLeave={() => setShowCredits(false)}
           >
-            {/* Speech bubble */}
+            {/* Speech bubble — pointer-events-none so it never intercepts clicks
+                on table rows above, and vanishes instantly when the cursor
+                leaves the "john mannully" text. */}
             <span
-              className={`absolute bottom-full left-1/2 -translate-x-1/2 mb-2.5 w-64 transition-opacity duration-150 ease-in-out pointer-events-auto ${showCredits ? "opacity-100" : "opacity-0 pointer-events-none"}`}
-              onMouseEnter={() => {
-                if (creditsTimer.current) clearTimeout(creditsTimer.current);
-              }}
-              onMouseLeave={() => {
-                creditsTimer.current = setTimeout(() => setShowCredits(false), 2000);
-              }}
+              className={`absolute bottom-full left-1/2 -translate-x-1/2 mb-2.5 w-64 pointer-events-none transition-opacity duration-150 ease-in-out ${showCredits ? "opacity-100" : "opacity-0"}`}
             >
               <span className="block bg-[#1a1a1a] border border-[#262626] rounded-md px-3 py-2.5 text-left shadow-lg">
                 <span className="block text-[#a1a1aa] text-[10px] leading-relaxed" style={{ fontFamily: "var(--font-playfair), Georgia, serif", fontStyle: "normal" }}>

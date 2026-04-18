@@ -13,4 +13,5 @@ export type Song = {
   lyrics?: string;
   chordsFile?: string;
   lyricsFile?: string;
+  notes?: string;
 }

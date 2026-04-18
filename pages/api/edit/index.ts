@@ -32,7 +32,7 @@ export default async function addSong(req: NextApiRequest, res: NextApiResponse)
 
     const {
       name, listen, chords, key, transpose, capo, bpm, beat,
-      type, usage_counter, lyrics, chordsFile, lyricsFile,
+      type, usage_counter, lyrics, chordsFile, lyricsFile, notes,
     } = req.body;
 
     // add a song
@@ -50,6 +50,7 @@ export default async function addSong(req: NextApiRequest, res: NextApiResponse)
       lyrics: typeof lyrics === "string" ? lyrics : "",
       chordsFile: typeof chordsFile === "string" ? chordsFile : "",
       lyricsFile: typeof lyricsFile === "string" ? lyricsFile : "",
+      notes: typeof notes === "string" ? notes : "",
     }
 
     const result = await myColl.insertOne(song);
