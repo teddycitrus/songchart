@@ -1082,14 +1082,6 @@ export default function Home() {
           >
             <Plus size={14} /> Add song
           </button>
-          {!auth && (
-            <button
-              onClick={() => setShowAuthModal(true)}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md text-[#71717a] ${TX} hover:text-white`}
-            >
-              <Lock size={14} /> Sign in
-            </button>
-          )}
         </div>
       </div>
 
@@ -1371,17 +1363,21 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Mobile FAB — opens the actions sheet (Generate lineup / Add song / Sign in). */}
+      {/* Mobile FAB — signed in: opens the actions sheet.
+                        signed out: goes straight to the sign-in modal. */}
       <button
         type="button"
-        onClick={() => setShowMobileActions(true)}
-        aria-label="Actions"
+        onClick={() => {
+          if (auth) setShowMobileActions(true);
+          else setShowAuthModal(true);
+        }}
+        aria-label={auth ? "Actions" : "Sign in"}
         className={`sm:hidden fixed bottom-14 right-4 z-40 w-14 h-14 rounded-full bg-white text-[#0a0a0a] shadow-lg flex items-center justify-center ${TX} active:bg-[#e4e4e7]`}
       >
         <Plus size={22} />
       </button>
 
-      {/* Mobile actions sheet */}
+      {/* Mobile actions sheet (signed-in only) */}
       {showMobileActions && (
         <ModalOverlay onClose={() => setShowMobileActions(false)}>
           <ModalPanel
@@ -1390,41 +1386,28 @@ export default function Home() {
             onClose={() => setShowMobileActions(false)}
           >
             <div className="px-6 py-5 space-y-2">
-              {auth && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowMobileActions(false);
-                    setShowRepertoireModal(true);
-                    generateRepertoire();
-                  }}
-                  className={`w-full flex items-center gap-2 rounded-md border border-[#262626] bg-[#0a0a0a] px-4 py-3 text-sm text-white ${TX}`}
-                >
-                  <Shuffle size={14} /> Generate lineup
-                </button>
-              )}
               <button
                 type="button"
                 onClick={() => {
                   setShowMobileActions(false);
-                  requireAuth(() => { setFormData({ ...EMPTY_FORM }); setShowAddModal(true); });
+                  setShowRepertoireModal(true);
+                  generateRepertoire();
+                }}
+                className={`w-full flex items-center gap-2 rounded-md border border-[#262626] bg-[#0a0a0a] px-4 py-3 text-sm text-white ${TX}`}
+              >
+                <Shuffle size={14} /> Generate lineup
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowMobileActions(false);
+                  setFormData({ ...EMPTY_FORM });
+                  setShowAddModal(true);
                 }}
                 className={`w-full flex items-center gap-2 rounded-md border border-[#262626] bg-[#0a0a0a] px-4 py-3 text-sm text-white ${TX}`}
               >
                 <Plus size={14} /> Add song
               </button>
-              {!auth && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowMobileActions(false);
-                    setShowAuthModal(true);
-                  }}
-                  className={`w-full flex items-center gap-2 rounded-md border border-[#262626] bg-[#0a0a0a] px-4 py-3 text-sm text-white ${TX}`}
-                >
-                  <Lock size={14} /> Sign in
-                </button>
-              )}
             </div>
           </ModalPanel>
         </ModalOverlay>
