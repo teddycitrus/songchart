@@ -6,17 +6,24 @@ import { Minus, Moon, Plus, Sun, X } from "lucide-react";
 
 const TX = "transition-[color,background-color,border-color,opacity] duration-150 ease-in-out";
 
+// A "tap" = pointerdown → pointerup on the primary pointer with minimal
+// movement and short duration. Anything beyond these thresholds is assumed
+// to be a scroll/drag and is ignored. Values are deliberately tight enough
+// that slow scrolls on touch devices won't register as taps.
+const TAP_MAX_MOVE = 10; // px
+const TAP_MAX_MS = 300;
+
 // Renders a .docx file client-side with mammoth. Mammoth is dynamically
 // imported so it only hits the bundle when someone actually opens a docx.
-//
-// Sizing strategy:
-// 1. Render content with `width: max-content` so each paragraph takes its
-//    natural width without wrapping. The element's `scrollWidth` then equals
-//    the widest line in the document.
-// 2. Scale uniformly so that widest line = available viewport width − gutter.
-// 3. The wrapper div is sized to (natural × scale) to reserve layout space
-//    for the transformed content, so vertical scroll still works.
-function DocxViewer({ url }: { url: string }) {
+function DocxViewer({
+  url,
+  chromeVisible,
+  onTap,
+}: {
+  url: string;
+  chromeVisible: boolean;
+  onTap: () => void;
+}) {
   const [html, setHtml] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -26,6 +33,10 @@ function DocxViewer({ url }: { url: string }) {
   const [zoom, setZoom] = useState(0);
   const [naturalSize, setNaturalSize] = useState<{ w: number; h: number }>({ w: 0, h: 0 });
   const [darkMode, setDarkMode] = useState(false);
+
+  // Tracks the current potential-tap pointer. Reset whenever we commit to
+  // "this is not a tap" (scroll/drag detected, pointer cancelled, tap fired).
+  const tapStart = useRef<{ x: number; y: number; t: number } | null>(null);
 
   const GUTTER_X = 48;
   const GUTTER_Y = 32;
@@ -99,9 +110,38 @@ function DocxViewer({ url }: { url: string }) {
   }
   const clampZoom = (z: number) => Math.min(1, Math.max(0, Math.round(z * 100) / 100));
 
+  const handlePointerDown = (e: React.PointerEvent) => {
+    if (!e.isPrimary) { tapStart.current = null; return; }
+    // Skip taps that originate from the floating control bar — those are
+    // button/slider interactions, not "show me the chrome" gestures.
+    if ((e.target as HTMLElement).closest("[data-no-tap]")) {
+      tapStart.current = null;
+      return;
+    }
+    tapStart.current = { x: e.clientX, y: e.clientY, t: Date.now() };
+  };
+  const handlePointerUp = (e: React.PointerEvent) => {
+    const start = tapStart.current;
+    tapStart.current = null;
+    if (!start) return;
+    const dx = Math.abs(e.clientX - start.x);
+    const dy = Math.abs(e.clientY - start.y);
+    const dt = Date.now() - start.t;
+    if (dx < TAP_MAX_MOVE && dy < TAP_MAX_MOVE && dt < TAP_MAX_MS) {
+      onTap();
+    }
+  };
+  const handlePointerCancel = () => { tapStart.current = null; };
+
   return (
     <div className="relative h-full w-full">
-      <div ref={scrollRef} className={`h-full w-full overflow-auto ${darkMode ? "bg-[#0a0a0a]" : "bg-white"}`}>
+      <div
+        ref={scrollRef}
+        className={`h-full w-full overflow-auto ${darkMode ? "bg-[#0a0a0a]" : "bg-white"}`}
+        onPointerDown={handlePointerDown}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerCancel}
+      >
         <div
           style={{
             width: naturalSize.w * scale,
@@ -126,7 +166,10 @@ function DocxViewer({ url }: { url: string }) {
         </div>
       </div>
 
-      <div className="absolute bottom-4 right-4 z-10 flex items-center gap-1 rounded-full bg-[#141414] border border-[#262626] shadow-lg px-1.5 py-1">
+      <div
+        data-no-tap
+        className={`absolute bottom-4 right-4 z-10 flex items-center gap-1 rounded-full bg-[#141414] border border-[#262626] shadow-lg px-1.5 py-1 transition-opacity duration-200 ${chromeVisible ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+      >
         <button
           type="button"
           onClick={() => setZoom(z => clampZoom(z - ZOOM_STEP))}
@@ -182,6 +225,10 @@ export default function ViewPage() {
   const label = kind === "chords" ? "Chords" : "Lyrics";
   const fileUrl = `/api/files/${kind}/${encodeURIComponent(fileName)}`;
 
+  // Chrome = header + floating docx controls. Tapping the docx body toggles.
+  // PDFs keep chrome visible always (the iframe captures taps itself).
+  const [chromeVisible, setChromeVisible] = useState(true);
+
   useEffect(() => {
     document.title = songName ? `${songName} — ${label}` : label;
   }, [songName, label]);
@@ -195,8 +242,28 @@ export default function ViewPage() {
   }
 
   return (
-    <div className="fixed inset-0 bg-[#0a0a0a] flex flex-col">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 shrink-0">
+    <div className="fixed inset-0 bg-[#0a0a0a]">
+      {/* Viewer fills the whole viewport; the header floats above it so it
+          can fade away without reflowing the document. */}
+      <div className="absolute inset-0">
+        {isDocx ? (
+          <DocxViewer
+            url={fileUrl}
+            chromeVisible={chromeVisible}
+            onTap={() => setChromeVisible(v => !v)}
+          />
+        ) : (
+          <iframe
+            src={fileUrl}
+            className="w-full h-full bg-white"
+            title={songName ? `${songName} — ${label}` : label}
+          />
+        )}
+      </div>
+
+      <div
+        className={`absolute top-0 inset-x-0 z-20 bg-[#0a0a0a] border-b border-white/10 px-4 py-3 flex items-center justify-between transition-opacity duration-200 ${chromeVisible ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+      >
         <div className="min-w-0">
           <p className="text-white text-sm font-medium truncate">{songName || fileName}</p>
           <p className="text-[#a1a1aa] text-xs truncate">
@@ -211,17 +278,6 @@ export default function ViewPage() {
         >
           <X size={18} />
         </button>
-      </div>
-      <div className="flex-1 min-h-0">
-        {isDocx ? (
-          <DocxViewer url={fileUrl} />
-        ) : (
-          <iframe
-            src={fileUrl}
-            className="w-full h-full bg-white"
-            title={songName ? `${songName} — ${label}` : label}
-          />
-        )}
       </div>
     </div>
   );
