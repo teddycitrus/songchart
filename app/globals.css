@@ -33,3 +33,10 @@
 .docx-rendered-dark th,
 .docx-rendered-dark td { border-color: #262626; }
 .docx-rendered-dark a { color: #60a5fa; }
+
+/* Row action buttons (edit/delete) are hidden until row hover on desktop.
+   On touch devices (no hover capability), always show them — otherwise
+   `group-hover` never fires and the buttons stay invisible. */
+@media (hover: none) {
+  .row-actions { opacity: 1; }
+}

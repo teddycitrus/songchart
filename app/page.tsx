@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ChevronDown, ChevronUp, ExternalLink, FileText, Link as LinkIcon, Lock,
-  MessageSquareText, Minus, Moon, Paperclip, Pencil, Plus, Search, Shuffle, Sun, Trash2, Upload, X
+  MessageSquareText, Paperclip, Pencil, Plus, Search, Shuffle, Trash2, Upload, X
 } from "lucide-react";
 import { Song } from "../types/Song";
 
@@ -82,195 +82,10 @@ function Spinner() {
   );
 }
 
-// Renders a .docx file client-side with mammoth. Mammoth is dynamically
-// imported so it only hits the bundle when someone actually opens a docx.
-//
-// Sizing strategy:
-// 1. Render content with `width: max-content` so each paragraph takes its
-//    natural width without wrapping. The element's `scrollWidth` then equals
-//    the widest line in the document.
-// 2. Scale uniformly so that widest line = available viewport width − gutter.
-// 3. The wrapper div is sized to (natural × scale) to reserve layout space
-//    for the transformed content, so vertical scroll still works.
-function DocxViewer({ url }: { url: string }) {
-  const [html, setHtml] = useState<string | null>(null);
-  const [err, setErr] = useState<string | null>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const contentRef = useRef<HTMLDivElement>(null);
-  // widthFit   = largest scale at which the widest LINE still fits horizontally
-  //              (above this, lines would wrap / overflow — hard cap)
-  // heightFit  = scale at which the FULL DOCUMENT (every line) fits vertically
-  //              (below this just makes text smaller without showing more)
-  // zoom       = 0..1, where 0 = heightFit (smallest useful size),
-  //              1 = widthFit (largest size without warping)
-  // scale      = what we actually apply to the transform
-  const [widthFit, setWidthFit] = useState(1);
-  const [heightFit, setHeightFit] = useState(1);
-  // Default to 0 = smallest size where the whole document fits on screen.
-  const [zoom, setZoom] = useState(0);
-  const [naturalSize, setNaturalSize] = useState<{ w: number; h: number }>({ w: 0, h: 0 });
-  const [darkMode, setDarkMode] = useState(false);
-
-  const GUTTER_X = 48; // horizontal breathing room
-  const GUTTER_Y = 32; // vertical breathing room for heightFit calculation
-  const ZOOM_STEP = 0.1;
-
-  // Linear interpolation from heightFit (zoom=0) → widthFit (zoom=1).
-  // If heightFit >= widthFit (very short doc), they collapse to the same value
-  // and the slider effectively becomes a no-op.
-  const minScale = Math.min(heightFit, widthFit);
-  const maxScale = widthFit;
-  const scale = minScale + (maxScale - minScale) * zoom;
-
-  useEffect(() => {
-    let cancelled = false;
-    setHtml(null);
-    setErr(null);
-    (async () => {
-      try {
-        const res = await fetch(url);
-        if (!res.ok) throw new Error(`Fetch failed (HTTP ${res.status})`);
-        const buf = await res.arrayBuffer();
-        const { default: mammoth } = await import("mammoth");
-        const result = await mammoth.convertToHtml({ arrayBuffer: buf });
-        if (cancelled) return;
-        setHtml(result.value || "<p><em>This document appears to be empty.</em></p>");
-      } catch (e) {
-        if (cancelled) return;
-        setErr(e instanceof Error ? e.message : "Failed to render file");
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [url]);
-
-  // Measure natural content dimensions + compute scale.
-  // Runs on mount, when content changes, and whenever the viewer resizes.
-  useEffect(() => {
-    if (html === null) return;
-    const scrollEl = scrollRef.current;
-    const contentEl = contentRef.current;
-    if (!scrollEl || !contentEl) return;
-
-    const update = () => {
-      // scrollWidth/scrollHeight give the natural (unscaled) dimensions
-      // because the content div uses `width: max-content`.
-      const naturalW = contentEl.scrollWidth;
-      const naturalH = contentEl.scrollHeight;
-      if (naturalW === 0 || naturalH === 0) return;
-
-      const availW = scrollEl.clientWidth - GUTTER_X;
-      const availH = scrollEl.clientHeight - GUTTER_Y;
-      // widthFit  = scale where widest line fills the viewer width.
-      // heightFit = scale where full document height fits in one view.
-      // Clamped to widthFit so a very short doc doesn't blow past the width cap.
-      const wFit = availW / naturalW;
-      const hFit = Math.min(availH / naturalH, wFit);
-      setWidthFit(wFit);
-      setHeightFit(hFit);
-      setNaturalSize({ w: naturalW, h: naturalH });
-    };
-
-    update();
-    const ro = new ResizeObserver(update);
-    ro.observe(scrollEl);
-    ro.observe(contentEl);
-    return () => ro.disconnect();
-  }, [html]);
-
-  if (err) {
-    return (
-      <div className="h-full w-full flex items-center justify-center px-6">
-        <p className="text-[#a1a1aa] text-sm text-center">Could not render file: {err}</p>
-      </div>
-    );
-  }
-  if (html === null) {
-    return (
-      <div className="h-full w-full flex items-center justify-center">
-        <div className="w-5 h-5 border border-[#3f3f46] border-t-white rounded-full animate-spin" />
-      </div>
-    );
-  }
-  const clampZoom = (z: number) => Math.min(1, Math.max(0, Math.round(z * 100) / 100));
-
-  return (
-    <div className="relative h-full w-full">
-      <div ref={scrollRef} className={`h-full w-full overflow-auto ${darkMode ? "bg-[#0a0a0a]" : "bg-white"}`}>
-        <div
-          style={{
-            width: naturalSize.w * scale,
-            height: naturalSize.h * scale,
-            margin: "0 auto",
-            position: "relative",
-          }}
-        >
-          <div
-            ref={contentRef}
-            className={`docx-rendered ${darkMode ? "docx-rendered-dark" : ""}`}
-            style={{
-              width: "max-content",
-              transform: `scale(${scale})`,
-              transformOrigin: "top left",
-              position: "absolute",
-              top: 0,
-              left: 0,
-            }}
-            dangerouslySetInnerHTML={{ __html: html }}
-          />
-        </div>
-      </div>
-
-      {/* Floating control bar — pinned to bottom-right of the viewer.
-          Slider: 0 = smallest size where every line still fits on screen,
-                  1 = largest size before text would wrap. */}
-      <div className="absolute bottom-4 right-4 z-10 flex items-center gap-1 rounded-full bg-[#141414] border border-[#262626] shadow-lg px-1.5 py-1">
-        <button
-          type="button"
-          onClick={() => setZoom(z => clampZoom(z - ZOOM_STEP))}
-          disabled={zoom <= 0.001}
-          className={`p-1.5 rounded-full text-white/80 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:hover:bg-transparent ${TX}`}
-          aria-label="Decrease font size"
-        >
-          <Minus size={14} />
-        </button>
-        <input
-          type="range"
-          min={0}
-          max={1}
-          step={ZOOM_STEP}
-          value={zoom}
-          onChange={e => setZoom(clampZoom(Number(e.target.value)))}
-          className="w-24 accent-white cursor-pointer"
-          aria-label="Font size"
-        />
-        <button
-          type="button"
-          onClick={() => setZoom(z => clampZoom(z + ZOOM_STEP))}
-          disabled={zoom >= 0.999}
-          className={`p-1.5 rounded-full text-white/80 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:hover:bg-transparent ${TX}`}
-          aria-label="Increase font size"
-        >
-          <Plus size={14} />
-        </button>
-        <div className="w-px h-4 bg-[#262626] mx-1" />
-        <button
-          type="button"
-          onClick={() => setDarkMode(d => !d)}
-          className={`p-1.5 rounded-full text-white/80 hover:text-white hover:bg-white/10 ${TX}`}
-          aria-label={darkMode ? "Switch to light mode" : "Switch to dark mode"}
-          title={darkMode ? "Light mode" : "Dark mode"}
-        >
-          {darkMode ? <Sun size={14} /> : <Moon size={14} />}
-        </button>
-      </div>
-    </div>
-  );
-}
-
 function ModalOverlay({ onClose, children }: { onClose?: () => void; children: React.ReactNode }) {
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-[2px]"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-[2px] p-4"
       onMouseDown={e => { if (e.target === e.currentTarget) onClose?.(); }}
     >
       {children}
@@ -293,7 +108,7 @@ function ModalPanel({
 }) {
   const maxW = size === "sm" ? "sm:max-w-sm" : "sm:max-w-lg";
   return (
-    <div className={`bg-[#141414] border border-[#262626] rounded-t-lg sm:rounded-lg shadow-lg w-full ${maxW} mx-0 sm:mx-4 max-h-[92vh] flex flex-col`}>
+    <div className={`bg-[#141414] border border-[#262626] rounded-lg shadow-lg w-full ${maxW} max-h-[92vh] flex flex-col`}>
       <div className="px-6 pt-5 pb-4 border-b border-[#262626] flex items-start justify-between shrink-0">
         <div>
           <h2 className="text-white text-base font-semibold leading-snug">{title}</h2>
@@ -450,7 +265,7 @@ function SongFormBody({
 }) {
   return (
     <div className="px-6 py-5 space-y-4">
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="text-white text-sm font-medium">
             Title<span className="text-red-400 ml-0.5">*</span>
@@ -514,7 +329,7 @@ function SongFormBody({
         />
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div>
           <label className="text-white text-sm font-medium">Transpose</label>
           <input id="transpose" className={INPUT_CLS} value={formData.transpose} onChange={onChangeText} placeholder="0" />
@@ -594,8 +409,6 @@ export default function Home() {
   const [authToken, setAuthToken] = useState<string | null>(null);
   // Chooser modal — shows Link / File options for a given song column.
   const [sourceChooser, setSourceChooser] = useState<{ kind: "chords" | "lyrics"; song: Song } | null>(null);
-  // File viewer modal — full-screen iframe pointed at /api/files/[kind]/[id]
-  const [fileViewer, setFileViewer] = useState<{ kind: "chords" | "lyrics"; fileName: string; songName: string } | null>(null);
   // Notes viewer modal — shows plain-text notes for a song.
   const [notesViewer, setNotesViewer] = useState<Song | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -605,6 +418,7 @@ export default function Home() {
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
   const [showCredits, setShowCredits] = useState(false);
   const [showRepertoireModal, setShowRepertoireModal] = useState(false);
+  const [showMobileActions, setShowMobileActions] = useState(false);
   const [repertoire, setRepertoire] = useState<{ entrance: Song; communion: Song; recessional: Song } | null>(null);
   const [repertoireError, setRepertoireError] = useState("");
   // Horizontal-scroll tracking — when the table container is scrolled right,
@@ -723,6 +537,21 @@ export default function Home() {
     if (auth) { action(); return; }
     setPendingAction(() => action);
     setShowAuthModal(true);
+  };
+
+  // Open chords/lyrics. If the song has both a URL and a file, show the
+  // chooser modal; otherwise go straight to whichever one exists.
+  const openSource = (kind: "chords" | "lyrics", song: Song) => {
+    const url = kind === "chords" ? song.chords : song.lyrics;
+    const fileName = kind === "chords" ? song.chordsFile : song.lyricsFile;
+    if (url && fileName) {
+      setSourceChooser({ kind, song });
+    } else if (url) {
+      window.open(url, "_blank", "noopener,noreferrer");
+    } else if (fileName) {
+      const viewUrl = `/view/${kind}/${encodeURIComponent(fileName)}?song=${encodeURIComponent(song.name)}`;
+      window.open(viewUrl, "_blank", "noopener,noreferrer");
+    }
   };
 
   const checkAuth = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -1186,19 +1015,18 @@ export default function Home() {
                   </a>
                 ) : null}
                 {fileName ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setFileViewer({ kind, fileName, songName: song.name });
-                      setSourceChooser(null);
-                    }}
+                  <a
+                    href={`/view/${kind}/${encodeURIComponent(fileName)}?song=${encodeURIComponent(song.name)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => setSourceChooser(null)}
                     className={`w-full flex items-center justify-between rounded-md border border-[#262626] bg-[#0a0a0a] px-4 py-3 text-sm text-white hover:bg-[#1a1a1a] hover:border-[#3f3f46] ${TX}`}
                   >
                     <span className="inline-flex items-center gap-2">
                       <FileText size={14} /> File
                     </span>
                     <span className="text-[#71717a] text-xs">{fileName.toLowerCase().endsWith(".pdf") ? "PDF" : "DOCX"}</span>
-                  </button>
+                  </a>
                 ) : null}
                 {!url && !fileName && (
                   <p className="text-[#71717a] text-sm text-center">No sources available.</p>
@@ -1235,52 +1063,11 @@ export default function Home() {
         </ModalOverlay>
       )}
 
-      {/* File viewer — full-screen. PDFs render natively via <iframe>;
-          .docx is converted to HTML client-side by mammoth (DocxViewer). */}
-      {fileViewer && (() => {
-        const fileUrl = `/api/files/${fileViewer.kind}/${encodeURIComponent(fileViewer.fileName)}`;
-        const isDocx = fileViewer.fileName.toLowerCase().endsWith(".docx");
-        return (
-          <div
-            className="fixed inset-0 z-[60] bg-black/90 backdrop-blur-sm flex flex-col"
-            onMouseDown={e => { if (e.target === e.currentTarget) setFileViewer(null); }}
-          >
-            <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 shrink-0">
-              <div className="min-w-0">
-                <p className="text-white text-sm font-medium truncate">{fileViewer.songName}</p>
-                <p className="text-[#a1a1aa] text-xs truncate">
-                  {fileViewer.kind === "chords" ? "Chords" : "Lyrics"} · {isDocx ? "DOCX" : "PDF"}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setFileViewer(null)}
-                className={`p-2 rounded-md text-white/70 hover:text-white hover:bg-white/10 ${TX}`}
-                aria-label="Close viewer"
-              >
-                <X size={18} />
-              </button>
-            </div>
-            <div className="flex-1 min-h-0">
-              {isDocx ? (
-                <DocxViewer url={fileUrl} />
-              ) : (
-                <iframe
-                  src={fileUrl}
-                  className="w-full h-full bg-white"
-                  title={`${fileViewer.songName} — ${fileViewer.kind}`}
-                />
-              )}
-            </div>
-          </div>
-        );
-      })()}
-
       {/* Header */}
       <div className="px-6 py-4 border-b border-[#262626] flex items-center justify-between">
         <div className="flex flex-col items-center gap-2">
           <h1 className="text-white italic text-3xl font-semibold tracking-tight">SongChart</h1>        </div>
-        <div className="flex items-center gap-2">
+        <div className="hidden sm:flex items-center gap-2">
           {auth && (
             <button
               onClick={() => { setShowRepertoireModal(true); generateRepertoire(); }}
@@ -1330,7 +1117,7 @@ export default function Home() {
         const pinSongColumn = filteredSongs.length > 1;
         const showFloatingTitle = pinSongColumn && tableScrolled;
         return (
-      <div ref={tableWrapRef} className="overflow-x-auto">
+      <div ref={tableWrapRef} className="hidden sm:block overflow-x-auto">
         <table className="w-full text-sm border-collapse">
           <thead>
             <tr className="border-b border-[#262626]">
@@ -1405,7 +1192,7 @@ export default function Home() {
                     {(song.chords || song.chordsFile) ? (
                       <button
                         type="button"
-                        onClick={e => { e.stopPropagation(); setSourceChooser({ kind: "chords", song }); }}
+                        onClick={e => { e.stopPropagation(); openSource("chords", song); }}
                         className={`inline-flex items-center gap-1 text-xs text-[#71717a] hover:text-[#a1a1aa] ${TX}`}
                       >
                         <ExternalLink size={12} /> open
@@ -1416,7 +1203,7 @@ export default function Home() {
                     {(song.lyrics || song.lyricsFile) ? (
                       <button
                         type="button"
-                        onClick={e => { e.stopPropagation(); setSourceChooser({ kind: "lyrics", song }); }}
+                        onClick={e => { e.stopPropagation(); openSource("lyrics", song); }}
                         className={`inline-flex items-center gap-1 text-xs text-[#71717a] hover:text-[#a1a1aa] ${TX}`}
                       >
                         <ExternalLink size={12} /> open
@@ -1452,7 +1239,7 @@ export default function Home() {
                     ) : <span className="text-[#3f3f46]">—</span>}
                   </td>
                   <td className="px-4 py-3">
-                    <div className={`flex gap-0.5 opacity-0 group-hover:opacity-100 ${TX}`}>
+                    <div className={`row-actions flex gap-0.5 opacity-0 group-hover:opacity-100 ${TX}`}>
                       <button
                         onClick={() => requireAuth(() => { setSelectedSong(song); setShowEditModal(true); })}
                         className={`p-1.5 rounded-md text-[#71717a] hover:text-white hover:bg-[#262626] ${TX}`}
@@ -1485,6 +1272,163 @@ export default function Home() {
       </div>
         );
       })()}
+
+      {/* Mobile card list — shown below sm, replaces the wide table. */}
+      <div className="sm:hidden pb-24">
+        {filteredSongs.length === 0 ? (
+          <div className="px-4 py-16 text-center text-[#71717a] text-sm">
+            {search ? `No results for "${search}"` : "No songs yet."}
+          </div>
+        ) : (
+          <ul className="divide-y divide-[#1a1a1a]">
+            {filteredSongs.map(song => {
+              const hasChords = !!(song.chords || song.chordsFile);
+              const hasLyrics = !!(song.lyrics || song.lyricsFile);
+              const meta: { label: string; value: string }[] = [
+                { label: "Key",       value: song.key },
+                { label: "BPM",       value: song.bpm },
+                { label: "Capo",      value: song.capo },
+                { label: "Transpose", value: song.transpose },
+                { label: "Beat",      value: song.beat },
+              ].filter(m => !!m.value);
+
+              const cardBtn =
+                `inline-flex items-center justify-center gap-1.5 rounded-md border border-[#262626] bg-[#0a0a0a] px-3 py-2.5 text-xs text-white ${TX}`;
+
+              return (
+                <li key={song._id} className="px-4 py-4 space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="text-white text-base font-medium break-words flex-1 min-w-0">{song.name}</p>
+                    {song.type && song.type.length > 0 && (
+                      <div className="flex flex-wrap gap-1 justify-end shrink-0 max-w-[50%]">
+                        {song.type.map(t => (
+                          <span key={t} className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${TYPE_PILLS[t] ?? "bg-zinc-500/10 text-zinc-400 border border-zinc-500/20"}`}>
+                            {t}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {meta.length > 0 && (
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                      {meta.map(m => (
+                        <div key={m.label} className="flex gap-1.5 min-w-0">
+                          <span className="text-[#71717a] shrink-0">{m.label}</span>
+                          <span className="text-white truncate">{m.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-2">
+                    {song.listen && (
+                      <a href={song.listen} target="_blank" rel="noopener noreferrer" className={cardBtn}>
+                        <ExternalLink size={14} /> Video
+                      </a>
+                    )}
+                    {hasChords && (
+                      <button type="button" onClick={() => openSource("chords", song)} className={cardBtn}>
+                        <FileText size={14} /> Chords
+                      </button>
+                    )}
+                    {hasLyrics && (
+                      <button type="button" onClick={() => openSource("lyrics", song)} className={cardBtn}>
+                        <FileText size={14} /> Lyrics
+                      </button>
+                    )}
+                    {song.notes && (
+                      <button type="button" onClick={() => setNotesViewer(song)} className={cardBtn}>
+                        <MessageSquareText size={14} /> Notes
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => requireAuth(() => { setSelectedSong(song); setShowEditModal(true); })}
+                      className={`flex-1 inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-2 text-xs text-[#71717a] ${TX}`}
+                    >
+                      <Pencil size={14} /> Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => requireAuth(() => { setDeleteError(""); setSongToDelete(song); })}
+                      className={`flex-1 inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-2 text-xs text-[#71717a] hover:text-red-400 ${TX}`}
+                    >
+                      <Trash2 size={14} /> Delete
+                    </button>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        <div className="px-4 py-3 text-[#3f3f46] text-xs border-t border-[#262626]">
+          {filteredSongs.length} {filteredSongs.length === 1 ? "song" : "songs"}
+          {search && ` matching "${search}"`}
+        </div>
+      </div>
+
+      {/* Mobile FAB — opens the actions sheet (Generate lineup / Add song / Sign in). */}
+      <button
+        type="button"
+        onClick={() => setShowMobileActions(true)}
+        aria-label="Actions"
+        className={`sm:hidden fixed bottom-14 right-4 z-40 w-14 h-14 rounded-full bg-white text-[#0a0a0a] shadow-lg flex items-center justify-center ${TX} active:bg-[#e4e4e7]`}
+      >
+        <Plus size={22} />
+      </button>
+
+      {/* Mobile actions sheet */}
+      {showMobileActions && (
+        <ModalOverlay onClose={() => setShowMobileActions(false)}>
+          <ModalPanel
+            title="Actions"
+            size="sm"
+            onClose={() => setShowMobileActions(false)}
+          >
+            <div className="px-6 py-5 space-y-2">
+              {auth && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowMobileActions(false);
+                    setShowRepertoireModal(true);
+                    generateRepertoire();
+                  }}
+                  className={`w-full flex items-center gap-2 rounded-md border border-[#262626] bg-[#0a0a0a] px-4 py-3 text-sm text-white ${TX}`}
+                >
+                  <Shuffle size={14} /> Generate lineup
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowMobileActions(false);
+                  requireAuth(() => { setFormData({ ...EMPTY_FORM }); setShowAddModal(true); });
+                }}
+                className={`w-full flex items-center gap-2 rounded-md border border-[#262626] bg-[#0a0a0a] px-4 py-3 text-sm text-white ${TX}`}
+              >
+                <Plus size={14} /> Add song
+              </button>
+              {!auth && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowMobileActions(false);
+                    setShowAuthModal(true);
+                  }}
+                  className={`w-full flex items-center gap-2 rounded-md border border-[#262626] bg-[#0a0a0a] px-4 py-3 text-sm text-white ${TX}`}
+                >
+                  <Lock size={14} /> Sign in
+                </button>
+              )}
+            </div>
+          </ModalPanel>
+        </ModalOverlay>
+      )}
 
       {/* Footer */}
       <div className="fixed bottom-0 inset-x-0 z-40 flex justify-center pb-4 pointer-events-none">
