@@ -15,7 +15,7 @@ import { Song } from "../types/Song";
 // Elevation     : lightness steps only (ground → surface → raised), no borders
 //                 on cards, shadows only on dialogs and popovers
 // Border radius : rounded-full for controls · 14px nested panels · 20px cards
-// Accent        : candle gold, only on the mark and the selected part filter
+// Accent        : candle gold, only on the selected part filter
 // Transitions   : 150ms ease-out on colour, opacity and press scale
 // Icons         : 16px, outline, grey
 // Type scale    : 20 title · 16 dialog title · 14 body · 13 meta · 12 labels
@@ -98,17 +98,6 @@ function hostOf(url: string) {
 function Spinner() {
   return (
     <span className="inline-block w-3.5 h-3.5 border border-current border-t-transparent rounded-full animate-spin shrink-0" />
-  );
-}
-
-// SongChart's mark: one note on an accent tile.
-function Mark() {
-  return (
-    <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" className="shrink-0">
-      <rect width="24" height="24" rx="7" fill="var(--accent)" />
-      <ellipse cx="10" cy="16" rx="3.4" ry="2.6" transform="rotate(-20 10 16)" fill="var(--ground)" />
-      <path d="M13 15.2V6.2c2 .3 3.6 1.4 4.4 3" stroke="var(--ground)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-    </svg>
   );
 }
 
@@ -807,7 +796,6 @@ export default function Home() {
     <header className="sticky top-0 z-30 bg-ground border-b border-line">
       <div className="mx-auto flex h-14 max-w-[1280px] items-center justify-between gap-4 px-4 sm:px-8">
         <div className="flex min-w-0 items-center gap-3">
-          <Mark />
           <span className="text-[15px] font-semibold tracking-[-0.01em]">SongChart</span>
           <span className="hidden sm:block h-5 w-px bg-line" />
           <span className="hidden sm:block truncate text-sm text-muted">SACM Youth Choir</span>
