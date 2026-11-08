@@ -2,8 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ChevronDown, ChevronUp, ExternalLink, FileText, Link as LinkIcon, Lock,
-  MessageSquareText, Paperclip, Pencil, Plus, Search, Shuffle, Trash2, Unlock, Upload, X
+  ChevronDown, ChevronUp, ExternalLink, Lock, Pencil, Plus, Search, Shuffle, Trash2, X
 } from "lucide-react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../convex/_generated/api";
@@ -11,58 +10,65 @@ import type { Id } from "../convex/_generated/dataModel";
 import { Song } from "../types/Song";
 
 // ── Design tokens ──────────────────────────────────────────────────────────
-// Border radius  : rounded-md (4→6px) for inputs/buttons
-//                  rounded-lg (8px) for modals/panels
-//                  rounded-full for pills only
-// Transitions    : duration-150 ease-in-out, per-property (no shorthand)
-// Icons          : 14px standard, 16px for modal close/header only
-// Type scale     : text-base headings · text-sm body/labels · text-xs meta
-// Shadows        : shadow-lg for elevated panels only
+// Colours       : CSS custom properties in globals.css, mapped to Tailwind
+//                 roles (ground, surface, raised, ink, muted, faint, accent)
+// Elevation     : lightness steps only (ground → surface → raised), no borders
+//                 on cards, shadows only on dialogs and popovers
+// Border radius : rounded-full for controls · 14px nested panels · 20px cards
+// Accent        : candle gold, only on the mark and the selected part filter
+// Transitions   : 150ms ease-out on colour, opacity and press scale
+// Icons         : 16px, outline, grey
+// Type scale    : 20 title · 16 dialog title · 14 body · 13 meta · 12 labels
 // ──────────────────────────────────────────────────────────────────────────
 
-const TX = "transition-[color,background-color,border-color,opacity] duration-150 ease-in-out";
-
-// Type pill colors — full literals required for Tailwind JIT
-const TYPE_PILLS: Record<string, string> = {
-  entrance:    "bg-blue-500/10 text-blue-400 border border-blue-500/20",
-  communion:   "bg-violet-500/10 text-violet-400 border border-violet-500/20",
-  recessional: "bg-amber-500/10 text-amber-400 border border-amber-500/20",
-  misc:        "bg-zinc-500/10 text-zinc-400 border border-zinc-500/20",
-};
+const TX = "transition-[color,background-color,border-color,opacity,transform] duration-150 ease-out";
 
 const SONG_TYPES = ["entrance", "communion", "recessional", "misc"] as const;
+type SongType = typeof SONG_TYPES[number];
 
-// Shared input class — dark surface inside modals
-const INPUT_CLS =
-  "mt-1 w-full rounded-md border border-[#262626] bg-[#0a0a0a] px-3 py-2 text-sm text-white " +
-  "placeholder:text-[#3f3f46] focus:outline-none focus:ring-1 focus:ring-white/30 " +
-  "focus:border-white/30 transition-[border-color,box-shadow] duration-150 ease-in-out";
+const PART_LABELS: Record<string, string> = {
+  entrance: "Entrance",
+  communion: "Communion",
+  recessional: "Recessional",
+  misc: "Misc",
+};
+
+// Neutral chip for a mass part. Parts are categories, not status, so they
+// carry no hue.
+const CHIP =
+  "inline-flex h-6 flex-none items-center whitespace-nowrap rounded-full bg-raised px-2.5 text-xs text-muted";
+
+// Shared input classes — dark well inside the dialog surface
+const FIELD =
+  "mt-2 w-full border border-control bg-ground px-4 text-sm text-ink placeholder:text-faint " +
+  "focus:outline-none focus:border-muted transition-[border-color] duration-150 ease-out";
+const INPUT_CLS = `${FIELD} h-10 rounded-full`;
+const TEXTAREA_CLS = `${FIELD} rounded-[14px] py-2.5 leading-6 resize-y min-h-[88px]`;
+const LABEL_CLS = "text-sm font-medium text-ink";
 
 // Shared error box — used in every modal for submit/submit/auth errors
-const ERR_BOX =
-  "text-red-400 text-xs bg-red-500/10 border border-red-500/20 rounded-md px-3 py-2";
+const ERR_BOX = "rounded-[14px] bg-negative-bg px-4 py-2.5 text-[13px] text-negative";
 
 // Shared button classes
-const BTN_GHOST =
-  `inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md border border-[#262626] text-white ${TX} hover:bg-[#1a1a1a] disabled:opacity-40 disabled:cursor-not-allowed`;
-const BTN_PRIMARY =
-  `inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md bg-white text-[#0a0a0a] ${TX} hover:bg-[#e4e4e7] disabled:opacity-40 disabled:cursor-not-allowed`;
-const BTN_DANGER =
-  `inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md bg-red-600 text-white ${TX} hover:bg-red-500 disabled:opacity-40 disabled:cursor-not-allowed`;
+const BTN_BASE =
+  `inline-flex h-9 items-center justify-center gap-2 rounded-full px-4 text-sm font-medium ${TX} ` +
+  "active:scale-[0.97] disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100";
+const BTN_GHOST   = `${BTN_BASE} bg-raised text-ink hover:bg-raised-hover`;
+const BTN_PRIMARY = `${BTN_BASE} bg-ink text-ground hover:bg-ink-hover`;
+const BTN_DANGER  = `${BTN_BASE} bg-negative text-white hover:bg-negative-hover`;
+const ICON_BTN =
+  `inline-flex h-8 w-8 items-center justify-center rounded-full text-faint ${TX} active:scale-[0.94]`;
 
 // `numeric` columns are right-aligned with tabular figures so digits line up by
 // place value (column reads as a number, not as text).
 const COLUMNS: { key: keyof Song; label: string; sortable: boolean; numeric?: boolean }[] = [
   { key: "name",      label: "Song",      sortable: true  },
-  { key: "listen",    label: "Video",    sortable: false },
-  { key: "chords",    label: "Chords",    sortable: false },
-  { key: "lyrics",    label: "Lyrics",    sortable: false },
+  { key: "chords",    label: "Open",      sortable: false },
   { key: "key",       label: "Key",       sortable: true  },
   { key: "capo",      label: "Capo",      sortable: true, numeric: true },
   { key: "bpm",       label: "BPM",       sortable: true, numeric: true },
   { key: "beat",      label: "Beat",      sortable: true  },
-  { key: "type",      label: "Type",      sortable: false },
-  { key: "notes",     label: "Notes",     sortable: false },
+  { key: "type",      label: "Part",      sortable: false },
 ];
 
 const EMPTY_FORM = {
@@ -83,6 +89,10 @@ const EMPTY_FORM = {
 
 type FormData = typeof EMPTY_FORM;
 
+function hostOf(url: string) {
+  try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return ""; }
+}
+
 // ── Shared primitives ──────────────────────────────────────────────────────
 
 function Spinner() {
@@ -91,10 +101,21 @@ function Spinner() {
   );
 }
 
+// SongChart's mark: one note on an accent tile.
+function Mark() {
+  return (
+    <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" className="shrink-0">
+      <rect width="24" height="24" rx="7" fill="var(--accent)" />
+      <ellipse cx="10" cy="16" rx="3.4" ry="2.6" transform="rotate(-20 10 16)" fill="var(--ground)" />
+      <path d="M13 15.2V6.2c2 .3 3.6 1.4 4.4 3" stroke="var(--ground)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+    </svg>
+  );
+}
+
 function ModalOverlay({ onClose, children }: { onClose?: () => void; children: React.ReactNode }) {
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-[2px] p-4"
+      className="anim-overlay fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 sm:p-4"
       onMouseDown={e => { if (e.target === e.currentTarget) onClose?.(); }}
     >
       {children}
@@ -117,13 +138,18 @@ function ModalPanel({
 }) {
   const maxW = size === "sm" ? "sm:max-w-sm" : "sm:max-w-lg";
   return (
-    <div className={`bg-[#141414] border border-[#262626] rounded-lg shadow-lg w-full ${maxW} max-h-[92vh] flex flex-col`}>
-      <div className="px-6 pt-5 pb-4 border-b border-[#262626] flex items-start justify-between shrink-0">
-        <div>
-          <h2 className="text-white text-base font-semibold leading-snug">{title}</h2>
-          {subtitle && <p className="text-[#a1a1aa] text-sm mt-0.5">{subtitle}</p>}
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
+      className={`anim-dialog bg-surface rounded-t-[20px] sm:rounded-[20px] shadow-[0_24px_64px_rgba(0,0,0,0.55)] w-full ${maxW} max-h-[92vh] flex flex-col pb-[env(safe-area-inset-bottom)] sm:pb-0`}
+    >
+      <div className="px-6 pt-6 pb-2 flex items-start justify-between gap-4 shrink-0">
+        <div className="min-w-0">
+          <h2 className="text-ink text-base font-semibold leading-6">{title}</h2>
+          {subtitle && <p className="text-muted text-sm leading-5 mt-1">{subtitle}</p>}
         </div>
-        <button onClick={onClose} className={`ml-4 p-1 rounded-md text-[#71717a] hover:text-white ${TX}`} aria-label="Close">
+        <button onClick={onClose} className={`${ICON_BTN} -mr-2 -mt-1 hover:text-ink hover:bg-raised`} aria-label="Close">
           <X size={16} />
         </button>
       </div>
@@ -134,7 +160,7 @@ function ModalPanel({
 
 function ModalFooter({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex justify-end gap-2 px-6 py-4 border-t border-[#262626] shrink-0">
+    <div className="flex justify-end gap-2 px-6 pt-2 pb-6 shrink-0">
       {children}
     </div>
   );
@@ -167,47 +193,44 @@ function FileSlot({
   const inputId = `${idPrefix}-file`;
   const showSaved = hasSaved && !pickedFile;
   const hasPicked = !!pickedFile;
+  const rowCls = "flex h-10 items-center justify-between gap-3 rounded-full bg-raised pl-4 pr-1.5 text-[13px]";
+  const textBtn = `inline-flex h-7 items-center rounded-full px-3 ${TX}`;
 
   return (
     <div className="mt-2">
       {showSaved && (
-        <div className="flex items-center justify-between rounded-md border border-[#262626] bg-[#0a0a0a] px-3 py-2 text-xs">
-          <span className="inline-flex items-center gap-1.5 text-white min-w-0">
-            <FileText size={12} className="shrink-0 text-[#71717a]" />
-            <span className="truncate">Saved {savedFileType ? savedFileType.toUpperCase() : "file"}</span>
-          </span>
-          <div className="flex items-center gap-1 shrink-0">
-            <label htmlFor={inputId} className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-white border border-[#262626] hover:bg-[#1a1a1a] cursor-pointer ${TX}`}>
-              <Upload size={11} /> Replace
+        <div className={rowCls}>
+          <span className="truncate text-ink">Saved {savedFileType ? savedFileType.toUpperCase() : "file"}</span>
+          <div className="flex items-center shrink-0">
+            <label htmlFor={inputId} className={`${textBtn} text-ink hover:bg-raised-hover cursor-pointer`}>
+              Replace
             </label>
             <button
               type="button"
               onClick={onClearSaved}
-              className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[#71717a] hover:text-red-400 ${TX}`}
+              className={`${textBtn} text-faint hover:text-negative`}
               title="Remove file"
             >
-              <X size={11} /> Remove
+              Remove
             </button>
           </div>
         </div>
       )}
 
       {hasPicked && pickedFile && (
-        <div className="flex items-center justify-between rounded-md border border-white/20 bg-white/5 px-3 py-2 text-xs">
-          <span className="inline-flex items-center gap-1.5 text-white min-w-0">
-            <Paperclip size={12} className="shrink-0 text-white" />
-            <span className="truncate">{pickedFile.name}</span>
-            <span className="text-[#71717a] shrink-0">
-              ({(pickedFile.size / 1024).toFixed(0)} KB)
-            </span>
+        <div className={rowCls}>
+          <span className="flex min-w-0 items-baseline gap-2">
+            <span className="truncate text-ink">{pickedFile.name}</span>
+            <span className="text-faint shrink-0">{(pickedFile.size / 1024).toFixed(0)} KB</span>
           </span>
           <button
             type="button"
             onClick={onClearPicked}
-            className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[#71717a] hover:text-red-400 ${TX} shrink-0`}
+            className={`${ICON_BTN} h-7 w-7 hover:text-negative shrink-0`}
             title="Discard"
+            aria-label="Discard file"
           >
-            <X size={11} />
+            <X size={14} />
           </button>
         </div>
       )}
@@ -215,9 +238,9 @@ function FileSlot({
       {!hasSaved && !hasPicked && (
         <label
           htmlFor={inputId}
-          className={`flex items-center justify-center gap-1.5 rounded-md border border-dashed border-[#262626] px-3 py-2 text-xs text-[#71717a] hover:text-white hover:border-[#3f3f46] cursor-pointer ${TX}`}
+          className={`flex h-10 items-center justify-center rounded-full border border-dashed border-control text-[13px] text-muted hover:text-ink hover:border-muted cursor-pointer ${TX}`}
         >
-          <Upload size={12} /> Upload PDF or DOCX
+          Or upload a PDF or DOCX
         </label>
       )}
 
@@ -277,12 +300,10 @@ function SongFormBody({
   onClearPickedLyricsFile: () => void;
 }) {
   return (
-    <div className="px-6 py-5 space-y-4">
+    <div className="px-6 py-4 space-y-5">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
-          <label className="text-white text-sm font-medium">
-            Title<span className="text-red-400 ml-0.5">*</span>
-          </label>
+          <label htmlFor="name" className={LABEL_CLS}>Title</label>
           <input
             required id="name"
             className={INPUT_CLS + (readOnlyName ? " opacity-60 cursor-not-allowed" : "")}
@@ -291,27 +312,16 @@ function SongFormBody({
           />
         </div>
         <div>
-          <label className="text-white text-sm font-medium">Key</label>
+          <label htmlFor="key" className={LABEL_CLS}>Key</label>
           <input id="key" className={INPUT_CLS} value={formData.key} onChange={onChangeText} placeholder="G Major" />
         </div>
       </div>
 
       <div>
-        <label className="text-white text-sm font-medium">Video URL</label>
-        <input
-          type="url" id="listen" className={INPUT_CLS}
-          value={formData.listen} onChange={onChangeText} placeholder="https://..."
-        />
-      </div>
-
-      <div>
-        <label className="text-white text-sm font-medium">
-          Chords<span className="text-red-400 ml-0.5">*</span>
-          <span className="text-[#71717a] font-normal ml-1">— link or file</span>
-        </label>
+        <label htmlFor="chords" className={LABEL_CLS}>Chords</label>
         <input
           type="url" id="chords" className={INPUT_CLS}
-          value={formData.chords} onChange={onChangeText} placeholder="https://..."
+          value={formData.chords} onChange={onChangeText} placeholder="Paste a link"
         />
         <FileSlot
           idPrefix="chords"
@@ -325,13 +335,10 @@ function SongFormBody({
       </div>
 
       <div>
-        <label className="text-white text-sm font-medium">
-          Lyrics<span className="text-red-400 ml-0.5">*</span>
-          <span className="text-[#71717a] font-normal ml-1">— link or file</span>
-        </label>
+        <label htmlFor="lyrics" className={LABEL_CLS}>Lyrics</label>
         <input
           type="url" id="lyrics" className={INPUT_CLS}
-          value={formData.lyrics} onChange={onChangeText} placeholder="https://..."
+          value={formData.lyrics} onChange={onChangeText} placeholder="Paste a link"
         />
         <FileSlot
           idPrefix="lyrics"
@@ -344,47 +351,56 @@ function SongFormBody({
         />
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div>
+        <label htmlFor="listen" className={LABEL_CLS}>Video</label>
+        <input
+          type="url" id="listen" className={INPUT_CLS}
+          value={formData.listen} onChange={onChangeText} placeholder="Paste a link"
+        />
+      </div>
+
+      <div className="grid grid-cols-3 gap-4">
         <div>
-          <label className="text-white text-sm font-medium">Capo</label>
+          <label htmlFor="capo" className={LABEL_CLS}>Capo</label>
           <input id="capo" className={INPUT_CLS} value={formData.capo} onChange={onChangeText} placeholder="0" />
         </div>
         <div>
-          <label className="text-white text-sm font-medium">BPM</label>
+          <label htmlFor="bpm" className={LABEL_CLS}>BPM</label>
           <input id="bpm" className={INPUT_CLS} value={formData.bpm} onChange={onChangeText} placeholder="77" />
+        </div>
+        <div>
+          <label htmlFor="beat" className={LABEL_CLS}>Beat</label>
+          <input id="beat" className={INPUT_CLS} value={formData.beat} onChange={onChangeText} placeholder="WorshipSlow" />
         </div>
       </div>
 
-      <div>
-        <label className="text-white text-sm font-medium">Beat</label>
-        <input id="beat" className={INPUT_CLS} value={formData.beat} onChange={onChangeText} placeholder="EtherealMovie" />
-      </div>
-
-      <div>
-        <p className="text-white text-sm font-medium mb-2">Type</p>
-        <div className="flex flex-wrap gap-2">
+      <fieldset>
+        <legend className={LABEL_CLS}>Part of the Mass</legend>
+        <div className="mt-2 flex flex-wrap gap-2">
           {SONG_TYPES.map(t => (
-            <label key={t} className="flex items-center gap-1.5 cursor-pointer select-none">
+            <label key={t} className="cursor-pointer select-none">
               <input
                 type="checkbox" value={t}
                 checked={formData.type.includes(t)}
                 onChange={e => onTypeToggle(t, e.target.checked)}
-                className="rounded-sm accent-white"
+                className="peer sr-only"
               />
-              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${TYPE_PILLS[t]}`}>{t}</span>
+              <span className={`inline-flex h-9 items-center rounded-full bg-raised px-4 text-[13px] text-muted hover:text-ink peer-checked:bg-ink peer-checked:text-ground peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-muted ${TX}`}>
+                {PART_LABELS[t]}
+              </span>
             </label>
           ))}
         </div>
-      </div>
+      </fieldset>
 
       <div>
-        <label className="text-white text-sm font-medium">Notes</label>
+        <label htmlFor="notes" className={LABEL_CLS}>Notes</label>
         <textarea
           id="notes"
-          className={INPUT_CLS + " resize-y min-h-[60px]"}
+          className={TEXTAREA_CLS}
           value={formData.notes}
           onChange={onChangeText}
-          placeholder="Any extra info about this song..."
+          placeholder="Arrangement, cues, who leads"
           rows={3}
         />
       </div>
@@ -402,11 +418,13 @@ export default function Home() {
   // Live query — re-runs automatically whenever the `songs` table changes.
   // Returns `undefined` until the first response arrives.
   const songsResult = useQuery(api.songs.list);
-  const songs = (songsResult ?? []) as unknown as Song[];
+  const songs = useMemo(() => (songsResult ?? []) as unknown as Song[], [songsResult]);
   const loading = songsResult === undefined;
   const [auth, setAuth] = useState(false);
   const [authError, setAuthError] = useState("");
   const [search, setSearch] = useState("");
+  // Part-of-the-Mass filter driven by the count cards above the table.
+  const [partFilter, setPartFilter] = useState<SongType | "all">("all");
   const [sortKey, setSortKey] = useState<keyof Song>("name");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [showAddModal, setShowAddModal] = useState(false);
@@ -431,7 +449,6 @@ export default function Home() {
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
   const [showCredits, setShowCredits] = useState(false);
   const [showRepertoireModal, setShowRepertoireModal] = useState(false);
-  const [showMobileActions, setShowMobileActions] = useState(false);
   const [repertoire, setRepertoire] = useState<{ entrance: Song; communion: Song; recessional: Song } | null>(null);
   const [repertoireError, setRepertoireError] = useState("");
   // Per-slot freeze: a frozen slot keeps its current song on respin while the
@@ -508,9 +525,23 @@ export default function Home() {
     }
   }, [selectedSong]);
 
-  const filteredSongs = useMemo(() => {
+  // Songs matching the search box. Part counts are computed from this set so
+  // they always describe what the current search can show.
+  const searchMatches = useMemo(() => {
     const q = search.toLowerCase();
-    const filtered = songs.filter(s => s.name.toLowerCase().includes(q));
+    return songs.filter(s => s.name.toLowerCase().includes(q));
+  }, [songs, search]);
+
+  const partCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: searchMatches.length };
+    for (const t of SONG_TYPES) counts[t] = searchMatches.filter(s => s.type?.includes(t)).length;
+    return counts;
+  }, [searchMatches]);
+
+  const filteredSongs = useMemo(() => {
+    const filtered = partFilter === "all"
+      ? searchMatches
+      : searchMatches.filter(s => s.type?.includes(partFilter));
     return [...filtered].sort((a, b) => {
       const av = String(a[sortKey] ?? "");
       const bv = String(b[sortKey] ?? "");
@@ -518,7 +549,7 @@ export default function Home() {
         ? av.localeCompare(bv, "en", { sensitivity: "base" })
         : bv.localeCompare(av, "en", { sensitivity: "base" });
     });
-  }, [songs, search, sortKey, sortDir]);
+  }, [searchMatches, partFilter, sortKey, sortDir]);
 
   function toggleSort(key: keyof Song) {
     if (key === sortKey) setSortDir(d => d === "asc" ? "desc" : "asc");
@@ -723,6 +754,13 @@ export default function Home() {
     }));
   };
 
+  const openLineup = () => {
+    setLockedSlots({ entrance: false, communion: false, recessional: false });
+    setShowRepertoireModal(true);
+    generateRepertoire();
+  };
+  const openAddSong = () => requireAuth(() => { setFormData({ ...EMPTY_FORM }); setShowAddModal(true); });
+
   const confirmRepertoire = async () => {
     if (!repertoire) return;
     setConfirming(true);
@@ -763,37 +801,90 @@ export default function Home() {
     }
   };
 
+  // ── Shell ────────────────────────────────────────────────────────────────
+
+  const topBar = (
+    <header className="sticky top-0 z-30 bg-ground border-b border-line">
+      <div className="mx-auto flex h-14 max-w-[1280px] items-center justify-between gap-4 px-4 sm:px-8">
+        <div className="flex min-w-0 items-center gap-3">
+          <Mark />
+          <span className="text-[15px] font-semibold tracking-[-0.01em]">SongChart</span>
+          <span className="hidden sm:block h-5 w-px bg-line" />
+          <span className="hidden sm:block truncate text-sm text-muted">SACM Youth Choir</span>
+        </div>
+        {!loading && (
+          <div className="flex items-center gap-2">
+            {auth && (
+              <>
+                <button onClick={openLineup} className={`${BTN_GHOST} hidden sm:inline-flex`}>
+                  Generate lineup
+                </button>
+                <button onClick={openLineup} className={`${BTN_GHOST} sm:hidden w-10 h-10 px-0`} aria-label="Generate lineup">
+                  <Shuffle size={16} />
+                </button>
+              </>
+            )}
+            <button onClick={openAddSong} className={`${BTN_PRIMARY} hidden sm:inline-flex`}>
+              Add song
+            </button>
+            <button onClick={openAddSong} className={`${BTN_PRIMARY} sm:hidden w-10 h-10 px-0`} aria-label="Add song">
+              <Plus size={18} />
+            </button>
+          </div>
+        )}
+      </div>
+    </header>
+  );
+
   // ── Loading / Error ──────────────────────────────────────────────────────
 
+  // Loading keeps the final layout with flat bars where the rows will land.
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-[#0a0a0a]">
-        <div className="w-5 h-5 border border-[#3f3f46] border-t-[#71717a] rounded-full animate-spin" />
+      <div className="min-h-screen bg-ground text-ink">
+        {topBar}
+        <main className="mx-auto max-w-[1280px] px-4 sm:px-8 pt-8 pb-16" aria-busy="true">
+          <h1 className="text-xl font-semibold tracking-[-0.01em]">Songs</h1>
+          <div className="mt-6 rounded-[20px] bg-surface py-2">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="flex h-[52px] items-center gap-8 px-5">
+                <div className="h-3.5 w-48 rounded-full bg-raised" />
+                <div className="hidden sm:block h-3.5 w-32 rounded-full bg-raised" />
+                <div className="hidden sm:block h-3.5 w-16 rounded-full bg-raised" />
+              </div>
+            ))}
+          </div>
+        </main>
       </div>
     );
   }
 
   // ── Main render ──────────────────────────────────────────────────────────
 
+  const closeAuth = () => { setShowAuthModal(false); setAuthError(""); setPendingAction(null); };
+  const countLabel = `${filteredSongs.length} ${filteredSongs.length === 1 ? "song" : "songs"}` +
+    (partFilter !== "all" ? ` for ${PART_LABELS[partFilter].toLowerCase()}` : "") +
+    (search ? ` matching "${search}"` : "");
+
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white">
+    <div className="min-h-screen bg-ground text-ink">
 
       {/* Auth modal */}
       {showAuthModal && (
-        <ModalOverlay onClose={() => { setShowAuthModal(false); setAuthError(""); setPendingAction(null); }}>
+        <ModalOverlay onClose={closeAuth}>
           <ModalPanel
-            title="sign in"
+            title="Sign in"
             subtitle="oooopen sesame"
             size="sm"
-            onClose={() => { setShowAuthModal(false); setAuthError(""); setPendingAction(null); }}
+            onClose={closeAuth}
           >
             <form onSubmit={checkAuth}>
-              <div className="px-6 py-5 space-y-3">
+              <div className="px-6 py-4 space-y-3">
                 <div>
-                  <label className="text-white text-sm font-medium">Password</label>
+                  <label htmlFor="auth" className={LABEL_CLS}>Password</label>
                   <input
-                    type="password" name="auth" className={INPUT_CLS}
-                    placeholder="Password" autoFocus
+                    type="password" id="auth" name="auth" className={INPUT_CLS}
+                    autoFocus
                   />
                 </div>
                 {authError && (
@@ -801,15 +892,11 @@ export default function Home() {
                 )}
               </div>
               <ModalFooter>
-                <button
-                  type="button"
-                  onClick={() => { setShowAuthModal(false); setAuthError(""); setPendingAction(null); }}
-                  className={BTN_GHOST}
-                >
+                <button type="button" onClick={closeAuth} className={BTN_GHOST}>
                   Cancel
                 </button>
                 <button type="submit" className={BTN_PRIMARY}>
-                  <Lock size={14} /> Continue
+                  Continue
                 </button>
               </ModalFooter>
             </form>
@@ -821,16 +908,17 @@ export default function Home() {
       {songToDelete && (
         <ModalOverlay onClose={() => { if (!deleting) { setSongToDelete(null); setDeleteError(""); } }}>
           <ModalPanel
-            title="delete song"
-            subtitle={`you really wanna erase "${songToDelete.name}" from the database? there's no redo or ctrl+z on this one`}
+            title={`Delete "${songToDelete.name}"?`}
+            subtitle="you really wanna erase this from the database? there's no redo or ctrl+z on this one"
             size="sm"
             onClose={() => { if (!deleting) { setSongToDelete(null); setDeleteError(""); } }}
           >
             {deleteError && (
-              <div className="px-6 pt-5">
+              <div className="px-6 pt-4">
                 <p className={ERR_BOX}>{deleteError}</p>
               </div>
             )}
+            <div className="pt-4" />
             <ModalFooter>
               <button
                 type="button"
@@ -841,7 +929,7 @@ export default function Home() {
                 Cancel
               </button>
               <button onClick={confirmDelete} disabled={deleting} className={BTN_DANGER}>
-                {deleting ? <><Spinner /> Deleting...</> : <><Trash2 size={14} /> Delete</>}
+                {deleting ? <><Spinner /> Deleting</> : "Delete song"}
               </button>
             </ModalFooter>
           </ModalPanel>
@@ -891,7 +979,7 @@ export default function Home() {
                   Cancel
                 </button>
                 <button type="submit" disabled={submitting} className={BTN_PRIMARY}>
-                  {submitting ? <><Spinner /> Saving...</> : <><Plus size={14} /> Add song</>}
+                  {submitting ? <><Spinner /> Saving</> : "Add song"}
                 </button>
               </ModalFooter>
             </form>
@@ -908,7 +996,7 @@ export default function Home() {
           }
         }}>
           <ModalPanel
-            title="edit song"
+            title="Edit song"
             subtitle="you couldn't get it right the first time?"
             onClose={() => {
               if (!submitting) {
@@ -943,7 +1031,7 @@ export default function Home() {
                   Cancel
                 </button>
                 <button type="submit" disabled={submitting} className={BTN_PRIMARY}>
-                  {submitting ? <><Spinner /> Saving...</> : "Save changes"}
+                  {submitting ? <><Spinner /> Saving</> : "Save changes"}
                 </button>
               </ModalFooter>
             </form>
@@ -955,42 +1043,41 @@ export default function Home() {
       {showRepertoireModal && (
         <ModalOverlay onClose={() => { if (!confirming) { setShowRepertoireModal(false); setRepertoire(null); setRepertoireError(""); setLockedSlots({ entrance: false, communion: false, recessional: false }); } }}>
           <ModalPanel
-            title="random repertoire"
+            title="Lineup"
             subtitle="if ur too lazy to pick songs manually ig"
             onClose={() => { if (!confirming) { setShowRepertoireModal(false); setRepertoire(null); setRepertoireError(""); setLockedSlots({ entrance: false, communion: false, recessional: false }); } }}
           >
-            <div className="px-6 py-5 space-y-3">
+            <div className="px-6 py-4 space-y-3">
               {repertoireError && (
                 <p className={ERR_BOX}>{repertoireError}</p>
               )}
               {repertoire && (
-                <div className="space-y-2">
+                <ol className="space-y-2">
                   {(["entrance", "communion", "recessional"] as const).map(slot => {
                     const song = repertoire[slot];
                     const frozen = lockedSlots[slot];
+                    const meta = [song.key, song.bpm && `${song.bpm} bpm`].filter(Boolean).join(" · ");
                     return (
-                      <div key={slot} className="flex items-center justify-between rounded-md border border-[#262626] bg-[#0a0a0a] px-4 py-3">
-                        <div>
-                          <p className="text-white text-sm font-medium">{song.name}</p>
-                          <p className="text-[#71717a] text-xs mt-0.5">{song.key || "—"}{song.bpm ? ` · ${song.bpm} bpm` : ""}</p>
+                      <li key={slot} className="flex items-center justify-between gap-4 rounded-[14px] bg-raised py-3 pl-4 pr-3">
+                        <div className="min-w-0">
+                          <p className="text-xs text-faint">{PART_LABELS[slot]}</p>
+                          <p className="mt-0.5 truncate text-[15px] font-medium text-ink">{song.name}</p>
+                          {meta && <p className="mt-0.5 text-[13px] text-muted">{meta}</p>}
                         </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${TYPE_PILLS[slot]}`}>{slot}</span>
-                          <button
-                            type="button"
-                            onClick={() => setLockedSlots(l => ({ ...l, [slot]: !l[slot] }))}
-                            className={`p-1.5 rounded-md ${TX} ${frozen ? "text-white bg-[#262626]" : "text-[#71717a] hover:text-white hover:bg-[#262626]"}`}
-                            title={frozen ? "Unfreeze — let this slot spin again" : "Freeze this song — keep it on respin"}
-                            aria-label={frozen ? "Unfreeze song" : "Freeze song"}
-                            aria-pressed={frozen}
-                          >
-                            {frozen ? <Lock size={14} /> : <Unlock size={14} />}
-                          </button>
-                        </div>
-                      </div>
+                        <button
+                          type="button"
+                          onClick={() => setLockedSlots(l => ({ ...l, [slot]: !l[slot] }))}
+                          className={`inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-[13px] ${TX} active:scale-[0.96] ${frozen ? "bg-ink text-ground" : "text-muted hover:text-ink hover:bg-raised-hover"}`}
+                          title={frozen ? "Unfreeze — let this slot spin again" : "Freeze this song — keep it on respin"}
+                          aria-pressed={frozen}
+                        >
+                          {frozen && <Lock size={12} />}
+                          {frozen ? "Kept" : "Keep"}
+                        </button>
+                      </li>
                     );
                   })}
-                </div>
+                </ol>
               )}
             </div>
             <ModalFooter>
@@ -998,7 +1085,7 @@ export default function Home() {
                 type="button"
                 onClick={() => generateRepertoire(true)}
                 disabled={confirming}
-                className={`${BTN_GHOST} disabled:opacity-40`}
+                className={BTN_GHOST}
               >
                 <Shuffle size={14} /> Respin
               </button>
@@ -1007,7 +1094,7 @@ export default function Home() {
                 disabled={confirming || !repertoire}
                 className={BTN_PRIMARY}
               >
-                {confirming ? <><Spinner /> Confirming...</> : "Confirm lineup"}
+                {confirming ? <><Spinner /> Confirming</> : "Confirm lineup"}
               </button>
             </ModalFooter>
           </ModalPanel>
@@ -1021,6 +1108,7 @@ export default function Home() {
         const fileUrl  = kind === "chords" ? song.chordsFileUrl  : song.lyricsFileUrl;
         const fileType = kind === "chords" ? song.chordsFileType : song.lyricsFileType;
         const label = kind === "chords" ? "Chords" : "Lyrics";
+        const rowCls = `flex h-12 items-center justify-between gap-4 rounded-[14px] bg-raised px-4 text-sm text-ink hover:bg-raised-hover active:scale-[0.99] ${TX}`;
         return (
           <ModalOverlay onClose={() => setSourceChooser(null)}>
             <ModalPanel
@@ -1029,19 +1117,20 @@ export default function Home() {
               size="sm"
               onClose={() => setSourceChooser(null)}
             >
-              <div className="px-6 py-5 space-y-2">
+              <div className="px-6 py-4 space-y-2">
                 {url ? (
                   <a
                     href={url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className={`flex items-center justify-between rounded-md border border-[#262626] bg-[#0a0a0a] px-4 py-3 text-sm text-white hover:bg-[#1a1a1a] hover:border-[#3f3f46] ${TX}`}
+                    className={rowCls}
                     onClick={() => setSourceChooser(null)}
                   >
-                    <span className="inline-flex items-center gap-2">
-                      <LinkIcon size={14} /> Link
+                    <span>Open link</span>
+                    <span className="inline-flex min-w-0 items-center gap-1.5 text-[13px] text-faint">
+                      <span className="truncate">{hostOf(url)}</span>
+                      <ExternalLink size={12} className="shrink-0" />
                     </span>
-                    <ExternalLink size={12} className="text-[#71717a]" />
                   </a>
                 ) : null}
                 {fileUrl ? (
@@ -1050,23 +1139,17 @@ export default function Home() {
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={() => setSourceChooser(null)}
-                    className={`w-full flex items-center justify-between rounded-md border border-[#262626] bg-[#0a0a0a] px-4 py-3 text-sm text-white hover:bg-[#1a1a1a] hover:border-[#3f3f46] ${TX}`}
+                    className={rowCls}
                   >
-                    <span className="inline-flex items-center gap-2">
-                      <FileText size={14} /> File
-                    </span>
-                    <span className="text-[#71717a] text-xs">{fileType ? fileType.toUpperCase() : ""}</span>
+                    <span>Open file</span>
+                    <span className="text-[13px] text-faint">{fileType ? fileType.toUpperCase() : ""}</span>
                   </a>
                 ) : null}
                 {!url && !fileUrl && (
-                  <p className="text-[#71717a] text-sm text-center">No sources available.</p>
+                  <p className="text-muted text-sm">No sources available.</p>
                 )}
               </div>
-              <ModalFooter>
-                <button type="button" onClick={() => setSourceChooser(null)} className={BTN_GHOST}>
-                  Close
-                </button>
-              </ModalFooter>
+              <div className="pb-2" />
             </ModalPanel>
           </ModalOverlay>
         );
@@ -1081,422 +1164,336 @@ export default function Home() {
             size="sm"
             onClose={() => setNotesViewer(null)}
           >
-            <div className="px-6 py-5">
-              <p className="text-[#a1a1aa] text-sm whitespace-pre-wrap">{notesViewer.notes || "No notes."}</p>
+            <div className="px-6 pt-2 pb-6">
+              <p className="text-ink text-sm leading-6 whitespace-pre-wrap">{notesViewer.notes || "No notes."}</p>
             </div>
-            <ModalFooter>
-              <button type="button" onClick={() => setNotesViewer(null)} className={BTN_GHOST}>
-                Close
-              </button>
-            </ModalFooter>
           </ModalPanel>
         </ModalOverlay>
       )}
 
-      {/* Header */}
-      <div className="px-6 py-4 border-b border-[#262626] flex items-center justify-between">
-        <div className="flex flex-col items-center gap-2">
-          <h1 className="text-white italic text-3xl font-semibold tracking-tight">SongChart</h1>        </div>
-        <div className="hidden sm:flex items-center gap-2">
-          {auth && (
-            <button
-              onClick={() => { setLockedSlots({ entrance: false, communion: false, recessional: false }); setShowRepertoireModal(true); generateRepertoire(); }}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-[#141414] border border-[#262626] text-white ${TX} hover:bg-[#1a1a1a]`}
-            >
-              <Shuffle size={14} /> Generate lineup
-            </button>
-          )}
-          <button
-            onClick={() => requireAuth(() => { setFormData({ ...EMPTY_FORM }); setShowAddModal(true); })}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-[#141414] border border-[#262626] text-white ${TX} hover:bg-[#1a1a1a]`}
-          >
-            <Plus size={14} /> Add song
-          </button>
+      {topBar}
+
+      <main className="mx-auto max-w-[1280px] px-4 sm:px-8 pt-8 pb-12">
+        {/* Title row */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <h1 className="text-xl font-semibold tracking-[-0.01em]">Songs</h1>
+          <div className="flex h-10 w-full items-center gap-2 rounded-full bg-surface pl-4 pr-1.5 sm:w-80 focus-within:bg-hover transition-[background-color] duration-150">
+            <Search size={16} className="text-faint shrink-0" />
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search songs"
+              aria-label="Search songs"
+              className="min-w-0 flex-1 bg-transparent text-sm text-ink placeholder:text-faint outline-none"
+            />
+            {search && (
+              <button onClick={() => setSearch("")} className={`${ICON_BTN} h-7 w-7 hover:text-ink hover:bg-raised`} aria-label="Clear search">
+                <X size={14} />
+              </button>
+            )}
+          </div>
         </div>
-      </div>
 
-      {/* Search */}
-      <div className="px-4 py-2.5 border-b border-[#262626] flex items-center gap-2">
-        <Search size={14} className="text-[#71717a] shrink-0" />
-        <input
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          placeholder="Search songs..."
-          className="bg-transparent text-sm text-white placeholder:text-[#71717a] outline-none flex-1"
-        />
-        {search && (
-          <button onClick={() => setSearch("")} className={`text-[#71717a] hover:text-white ${TX}`}>
-            <X size={14} />
-          </button>
-        )}
-      </div>
+        {/* Part-of-the-Mass count cards. They are the type filter for the list. */}
+        <div
+          role="group"
+          aria-label="Filter by part of the Mass"
+          className="-mx-4 mt-6 flex gap-2 overflow-x-auto px-4 sm:mx-0 sm:grid sm:grid-cols-5 sm:gap-[14px] sm:overflow-visible sm:px-0"
+        >
+          {(["all", ...SONG_TYPES] as const).map(p => {
+            const selected = partFilter === p;
+            return (
+              <button
+                key={p}
+                type="button"
+                onClick={() => setPartFilter(p)}
+                aria-pressed={selected}
+                className={`flex h-9 shrink-0 items-center gap-2 rounded-full border-[1.5px] px-4 text-left ${TX} active:scale-[0.98] sm:h-[64px] sm:flex-col sm:items-start sm:justify-center sm:gap-0.5 sm:rounded-[14px] sm:px-4 ${selected ? "border-accent bg-accent-tint" : "border-transparent bg-surface hover:bg-hover"}`}
+              >
+                <span className={`text-[13px] ${selected ? "text-ink" : "text-muted"}`}>
+                  {p === "all" ? "All songs" : PART_LABELS[p]}
+                </span>
+                <span className="text-[13px] font-semibold text-ink sm:text-base">{partCounts[p]}</span>
+              </button>
+            );
+          })}
+        </div>
 
-      {/* Table */}
-      {(() => {
-        // Skip the sticky Song column entirely when there's only one result —
-        // the user searched, narrowed to a single row, they already know which
-        // song they're looking at, so the column can just scroll naturally.
-        const pinSongColumn = filteredSongs.length > 1;
-        const showFloatingTitle = pinSongColumn && tableScrolled;
-        return (
-      <div ref={tableWrapRef} className="hidden sm:block overflow-x-auto">
-        <table className="w-full text-sm border-collapse">
-          <thead>
-            <tr className="border-b border-[#262626]">
-              {COLUMNS.map((col, i) => {
-                const isFirst = i === 0;
-                const stickyCls = !isFirst || !pinSongColumn
-                  ? ""
-                  : showFloatingTitle
-                    // Hide the "Song" header text when scrolled — floating row
-                    // labels below make it redundant, and this keeps the top-left
-                    // corner transparent so underlying content is visible.
-                    ? "sticky left-0 z-20 bg-transparent pointer-events-none invisible"
-                    : "sticky left-0 z-20 bg-[#0a0a0a] border-r border-[#1a1a1a]";
-                const sortTip = col.sortable
-                  ? sortKey === col.key
-                    ? `Sorted by ${col.label} (${sortDir === "asc" ? "ascending" : "descending"}) — click to reverse`
-                    : `Sort by ${col.label}`
-                  : undefined;
-                return (
-                  <th
-                    key={col.key}
-                    onClick={() => col.sortable ? toggleSort(col.key) : undefined}
-                    title={sortTip}
-                    className={`px-4 py-3 ${col.numeric ? "text-right" : "text-left"} text-xs font-medium text-[#71717a] whitespace-nowrap select-none ${col.sortable ? `cursor-pointer hover:text-[#a1a1aa] ${TX}` : ""} ${stickyCls}`}
-                  >
-                    <span className={`inline-flex items-center gap-1 ${col.numeric ? "flex-row-reverse" : ""}`}>
-                      {col.label}
-                      {col.sortable && sortKey === col.key && (
-                        sortDir === "asc"
-                          ? <ChevronUp size={12} className="text-[#a1a1aa]" />
-                          : <ChevronDown size={12} className="text-[#a1a1aa]" />
-                      )}
-                    </span>
-                  </th>
-                );
-              })}
-              <th className="px-4 py-3 w-20" />
-            </tr>
-          </thead>
-          <tbody>
-            {filteredSongs.length === 0 ? (
+        {/* Table */}
+        {(() => {
+          // Skip the sticky Song column entirely when there's only one result —
+          // the user searched, narrowed to a single row, they already know which
+          // song they're looking at, so the column can just scroll naturally.
+          const pinSongColumn = filteredSongs.length > 1;
+          const showFloatingTitle = pinSongColumn && tableScrolled;
+          const openBtn = `inline-flex h-8 items-center rounded-full px-3 text-[13px] hover:bg-raised active:scale-[0.96] ${TX}`;
+          return (
+        <div className="hidden lg:block mt-[14px] rounded-[20px] bg-surface overflow-hidden">
+        <div ref={tableWrapRef} className="overflow-x-auto">
+          <table className="w-full text-sm border-collapse">
+            <thead>
               <tr>
-                <td colSpan={COLUMNS.length + 1} className="px-4 py-10 text-center text-[#71717a] text-sm">
-                  {search ? `No results for "${search}"` : "No songs yet."}
-                </td>
+                {COLUMNS.map((col, i) => {
+                  const isFirst = i === 0;
+                  const stickyCls = !isFirst || !pinSongColumn
+                    ? ""
+                    : showFloatingTitle
+                      // Hide the "Song" header text when scrolled — floating row
+                      // labels below make it redundant, and this keeps the top-left
+                      // corner transparent so underlying content is visible.
+                      ? "sticky left-0 z-20 bg-transparent pointer-events-none invisible"
+                      : "sticky left-0 z-20 bg-surface";
+                  const sortTip = col.sortable
+                    ? sortKey === col.key
+                      ? `Sorted by ${col.label} (${sortDir === "asc" ? "ascending" : "descending"}) — click to reverse`
+                      : `Sort by ${col.label}`
+                    : undefined;
+                  const ariaSort = col.sortable && sortKey === col.key
+                    ? (sortDir === "asc" ? "ascending" : "descending")
+                    : undefined;
+                  return (
+                    <th
+                      key={col.key}
+                      aria-sort={ariaSort}
+                      className={`h-11 ${isFirst ? "pl-5 pr-4" : "px-4"} ${col.numeric ? "text-right" : "text-left"} text-xs font-normal text-faint whitespace-nowrap select-none ${isFirst ? "min-w-[240px]" : ""} ${stickyCls}`}
+                    >
+                      {col.sortable ? (
+                        <button
+                          type="button"
+                          onClick={() => toggleSort(col.key)}
+                          title={sortTip}
+                          className={`inline-flex items-center gap-1 hover:text-ink ${TX} ${col.numeric ? "flex-row-reverse" : ""} ${sortKey === col.key ? "text-ink" : ""}`}
+                        >
+                          {col.label}
+                          {sortKey === col.key && (
+                            sortDir === "asc" ? <ChevronUp size={12} /> : <ChevronDown size={12} />
+                          )}
+                        </button>
+                      ) : col.label}
+                    </th>
+                  );
+                })}
+                <th className="w-24"><span className="sr-only">Actions</span></th>
               </tr>
-            ) : (
-              filteredSongs.map(song => (
-                <tr key={song._id} className={`border-b border-[#1a1a1a] hover:bg-[#141414] group ${TX}`}>
-                  <td
-                    className={`whitespace-nowrap text-white font-medium ${TX} ${
-                      !pinSongColumn
-                        // Single-result case: plain cell, no stickiness.
-                        ? "px-4 py-3 text-sm"
-                        : showFloatingTitle
-                          // Floating label: transparent, tight left padding so it
-                          // hugs the viewport edge, smaller font, subtle shadow
-                          // so it stays legible over scrolled content below.
-                          ? "sticky left-0 z-10 bg-transparent pointer-events-none px-2 py-3 text-xs [text-shadow:0_1px_2px_rgba(0,0,0,0.9),0_0_6px_rgba(0,0,0,0.7)]"
-                          // Pinned solid cell when the column is naturally visible.
-                          : "sticky left-0 z-10 bg-[#0a0a0a] group-hover:bg-[#141414] border-r border-[#1a1a1a] px-4 py-3 text-sm"
-                    }`}
-                  >
-                    {song.name}
-                  </td>
-                  <td className="px-4 py-3">
-                    {song.listen ? (
-                      <a
-                        href={song.listen} target="_blank" rel="noopener noreferrer"
-                        className={`inline-flex items-center gap-1 text-xs text-[#71717a] hover:text-[#a1a1aa] ${TX}`}
-                        onClick={e => e.stopPropagation()}
-                      >
-                        <ExternalLink size={12} /> open
-                      </a>
-                    ) : <span className="text-[#3f3f46]">—</span>}
-                  </td>
-                  <td className="px-4 py-3">
-                    {(song.chords || song.chordsFileUrl) ? (
-                      <button
-                        type="button"
-                        onClick={e => { e.stopPropagation(); openSource("chords", song); }}
-                        className={`inline-flex items-center gap-1 text-xs text-[#71717a] hover:text-[#a1a1aa] ${TX}`}
-                      >
-                        <ExternalLink size={12} /> open
-                      </button>
-                    ) : <span className="text-[#3f3f46]">—</span>}
-                  </td>
-                  <td className="px-4 py-3">
-                    {(song.lyrics || song.lyricsFileUrl) ? (
-                      <button
-                        type="button"
-                        onClick={e => { e.stopPropagation(); openSource("lyrics", song); }}
-                        className={`inline-flex items-center gap-1 text-xs text-[#71717a] hover:text-[#a1a1aa] ${TX}`}
-                      >
-                        <ExternalLink size={12} /> open
-                      </button>
-                    ) : <span className="text-[#3f3f46]">—</span>}
-                  </td>
-                  <td className="px-4 py-3 text-[#71717a] text-sm">{song.key || <span className="text-[#3f3f46]">—</span>}</td>
-                  <td className="px-4 py-3 text-right tabular-nums text-[#71717a] text-sm">{song.capo || <span className="text-[#3f3f46]">—</span>}</td>
-                  <td className="px-4 py-3 text-right tabular-nums text-[#71717a] text-sm">{song.bpm || <span className="text-[#3f3f46]">—</span>}</td>
-                  <td className="px-4 py-3 text-[#71717a] text-sm">{song.beat || <span className="text-[#3f3f46]">—</span>}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-wrap gap-1">
-                      {song.type && song.type.length > 0
-                        ? song.type.map(t => (
-                            <span key={t} className={`text-xs px-2 py-0.5 rounded-full font-medium ${TYPE_PILLS[t] ?? "bg-zinc-500/10 text-zinc-400 border border-zinc-500/20"}`}>
-                              {t}
-                            </span>
-                          ))
-                        : <span className="text-[#3f3f46]">—</span>
-                      }
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    {song.notes ? (
-                      <button
-                        type="button"
-                        onClick={e => { e.stopPropagation(); setNotesViewer(song); }}
-                        className={`inline-flex items-center gap-1 text-xs text-[#71717a] hover:text-[#a1a1aa] ${TX}`}
-                      >
-                        <MessageSquareText size={12} /> view
-                      </button>
-                    ) : <span className="text-[#3f3f46]">—</span>}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className={`row-actions flex gap-0.5 opacity-0 group-hover:opacity-100 ${TX}`}>
-                      <button
-                        onClick={() => requireAuth(() => { setSelectedSong(song); setShowEditModal(true); })}
-                        className={`p-1.5 rounded-md text-[#71717a] hover:text-white hover:bg-[#262626] ${TX}`}
-                        title="Edit"
-                      >
-                        <Pencil size={14} />
-                      </button>
-                      <button
-                        onClick={() => requireAuth(() => { setDeleteError(""); setSongToDelete(song); })}
-                        className={`p-1.5 rounded-md text-[#71717a] hover:text-red-400 hover:bg-[#262626] ${TX}`}
-                        title="Delete"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
+            </thead>
+            <tbody>
+              {filteredSongs.length === 0 ? (
+                <tr>
+                  <td colSpan={COLUMNS.length + 1} className="px-5 py-12 text-center text-muted text-sm border-t border-rule">
+                    {search ? `No songs match "${search}".` : partFilter !== "all" ? `No songs tagged ${PART_LABELS[partFilter].toLowerCase()} yet.` : "No songs yet."}
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-          <tfoot>
-            <tr className="border-t border-[#262626]">
-              <td colSpan={COLUMNS.length + 1} className="px-4 py-2.5 text-[#3f3f46] text-xs">
-                {filteredSongs.length} {filteredSongs.length === 1 ? "song" : "songs"}
-                {search && ` matching "${search}"`}
-              </td>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
-        );
-      })()}
+              ) : (
+                filteredSongs.map(song => (
+                  <tr key={song._id} className={`border-t border-rule hover:bg-hover group ${TX}`}>
+                    <td
+                      className={`h-[52px] whitespace-nowrap text-ink font-medium ${TX} ${
+                        !pinSongColumn
+                          // Single-result case: plain cell, no stickiness.
+                          ? "pl-5 pr-4 text-sm"
+                          : showFloatingTitle
+                            // Floating label: transparent, tight left padding so it
+                            // hugs the viewport edge, smaller font, subtle shadow
+                            // so it stays legible over scrolled content below.
+                            ? "sticky left-0 z-10 bg-transparent pointer-events-none px-2 text-xs [text-shadow:0_1px_2px_rgba(0,0,0,0.9),0_0_6px_rgba(0,0,0,0.7)]"
+                            // Pinned solid cell when the column is naturally visible.
+                            : "sticky left-0 z-10 bg-surface group-hover:bg-hover pl-5 pr-4 text-sm"
+                      }`}
+                    >
+                      {song.name}
+                    </td>
+                    <td className="px-2 whitespace-nowrap">
+                      <div className="flex items-center">
+                        <span className="w-[76px]">
+                          {(song.chords || song.chordsFileUrl) && (
+                            <button type="button" onClick={e => { e.stopPropagation(); openSource("chords", song); }} className={`${openBtn} text-ink font-medium`}>
+                              Chords
+                            </button>
+                          )}
+                        </span>
+                        <span className="w-[72px]">
+                          {(song.lyrics || song.lyricsFileUrl) && (
+                            <button type="button" onClick={e => { e.stopPropagation(); openSource("lyrics", song); }} className={`${openBtn} text-ink font-medium`}>
+                              Lyrics
+                            </button>
+                          )}
+                        </span>
+                        <span className="w-[68px]">
+                          {song.listen && (
+                            <a href={song.listen} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className={`${openBtn} text-muted hover:text-ink`}>
+                              Video
+                            </a>
+                          )}
+                        </span>
+                        <span className="w-[68px]">
+                          {song.notes && (
+                            <button type="button" onClick={e => { e.stopPropagation(); setNotesViewer(song); }} className={`${openBtn} text-muted hover:text-ink`}>
+                              Notes
+                            </button>
+                          )}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-4 text-muted whitespace-nowrap">{song.key || <span className="text-faint">—</span>}</td>
+                    <td className="px-4 text-right tabular-nums text-muted">{song.capo || <span className="text-faint">—</span>}</td>
+                    <td className="px-4 text-right tabular-nums text-muted">{song.bpm || <span className="text-faint">—</span>}</td>
+                    <td className="px-4 text-muted whitespace-nowrap">{song.beat || <span className="text-faint">—</span>}</td>
+                    <td className="px-4">
+                      <div className="flex gap-1">
+                        {song.type && song.type.length > 0
+                          ? song.type.map(t => <span key={t} className={CHIP}>{PART_LABELS[t] ?? t}</span>)
+                          : <span className="text-faint">—</span>
+                        }
+                      </div>
+                    </td>
+                    <td className="pl-2 pr-4">
+                      <div className={`row-actions flex justify-end gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 ${TX}`}>
+                        <button
+                          onClick={() => requireAuth(() => { setSelectedSong(song); setShowEditModal(true); })}
+                          className={`${ICON_BTN} hover:text-ink hover:bg-raised`}
+                          title="Edit"
+                          aria-label={`Edit ${song.name}`}
+                        >
+                          <Pencil size={14} />
+                        </button>
+                        <button
+                          onClick={() => requireAuth(() => { setDeleteError(""); setSongToDelete(song); })}
+                          className={`${ICON_BTN} hover:text-negative hover:bg-raised`}
+                          title="Delete"
+                          aria-label={`Delete ${song.name}`}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+          <p className="border-t border-rule px-5 py-3 text-xs text-faint">{countLabel}</p>
+        </div>
+          );
+        })()}
 
-      {/* Mobile card list — shown below sm, replaces the wide table. */}
-      <div className="sm:hidden pb-24">
-        {filteredSongs.length === 0 ? (
-          <div className="px-4 py-16 text-center text-[#71717a] text-sm">
-            {search ? `No results for "${search}"` : "No songs yet."}
-          </div>
-        ) : (
-          <ul className="divide-y divide-[#1a1a1a]">
-            {filteredSongs.map(song => {
-              const hasChords = !!(song.chords || song.chordsFileUrl);
-              const hasLyrics = !!(song.lyrics || song.lyricsFileUrl);
-              const meta: { label: string; value: string }[] = [
-                { label: "Key",       value: song.key },
-                { label: "BPM",       value: song.bpm },
-                { label: "Capo",      value: song.capo },
-                { label: "Beat",      value: song.beat },
-              ].filter(m => !!m.value);
+        {/* Mobile list — shown below lg, replaces the wide table. */}
+        <div className="lg:hidden mt-4 sm:mt-[14px] rounded-[20px] bg-surface">
+          {filteredSongs.length === 0 ? (
+            <div className="px-4 py-12 text-center text-muted text-sm">
+              {search ? `No songs match "${search}".` : partFilter !== "all" ? `No songs tagged ${PART_LABELS[partFilter].toLowerCase()} yet.` : "No songs yet."}
+            </div>
+          ) : (
+            <ul>
+              {filteredSongs.map((song, i) => {
+                const hasChords = !!(song.chords || song.chordsFileUrl);
+                const hasLyrics = !!(song.lyrics || song.lyricsFileUrl);
+                const meta = [
+                  song.key,
+                  song.capo && `Capo ${song.capo}`,
+                  song.bpm && `${song.bpm} bpm`,
+                  song.beat,
+                ].filter(Boolean).join(" · ");
 
-              const cardBtn =
-                `inline-flex items-center justify-center gap-1.5 rounded-md border border-[#262626] bg-[#0a0a0a] px-3 py-2.5 text-xs text-white ${TX}`;
+                const cardBtn =
+                  `inline-flex h-10 items-center justify-center rounded-full bg-raised px-4 text-[13px] active:scale-[0.96] ${TX}`;
 
-              return (
-                <li key={song._id} className="px-4 py-4 space-y-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <p className="text-white text-base font-medium break-words flex-1 min-w-0">{song.name}</p>
-                    {song.type && song.type.length > 0 && (
-                      <div className="flex flex-wrap gap-1 justify-end shrink-0 max-w-[50%]">
-                        {song.type.map(t => (
-                          <span key={t} className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${TYPE_PILLS[t] ?? "bg-zinc-500/10 text-zinc-400 border border-zinc-500/20"}`}>
-                            {t}
-                          </span>
-                        ))}
+                return (
+                  <li key={song._id} className={`px-4 py-4 ${i > 0 ? "border-t border-rule" : ""}`}>
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="min-w-0 flex-1 break-words pt-1 text-[15px] font-medium leading-6 text-ink">{song.name}</p>
+                      <div className="-mr-2 flex shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => requireAuth(() => { setSelectedSong(song); setShowEditModal(true); })}
+                          className={`${ICON_BTN} h-10 w-10`}
+                          aria-label={`Edit ${song.name}`}
+                        >
+                          <Pencil size={16} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => requireAuth(() => { setDeleteError(""); setSongToDelete(song); })}
+                          className={`${ICON_BTN} h-10 w-10`}
+                          aria-label={`Delete ${song.name}`}
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </div>
+
+                    {(meta || (song.type && song.type.length > 0)) && (
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        {song.type?.map(t => <span key={t} className={CHIP}>{PART_LABELS[t] ?? t}</span>)}
+                        {meta && <p className="text-[13px] text-muted">{meta}</p>}
                       </div>
                     )}
-                  </div>
 
-                  {meta.length > 0 && (
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                      {meta.map(m => (
-                        <div key={m.label} className="flex gap-1.5 min-w-0">
-                          <span className="text-[#71717a] shrink-0">{m.label}</span>
-                          <span className="text-white truncate">{m.value}</span>
-                        </div>
-                      ))}
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      {hasChords && (
+                        <button type="button" onClick={() => openSource("chords", song)} className={`${cardBtn} text-ink font-medium`}>
+                          Chords
+                        </button>
+                      )}
+                      {hasLyrics && (
+                        <button type="button" onClick={() => openSource("lyrics", song)} className={`${cardBtn} text-ink font-medium`}>
+                          Lyrics
+                        </button>
+                      )}
+                      {song.listen && (
+                        <a href={song.listen} target="_blank" rel="noopener noreferrer" className={`${cardBtn} text-muted`}>
+                          Video
+                        </a>
+                      )}
+                      {song.notes && (
+                        <button type="button" onClick={() => setNotesViewer(song)} className={`${cardBtn} text-muted`}>
+                          Notes
+                        </button>
+                      )}
                     </div>
-                  )}
-
-                  <div className="grid grid-cols-2 gap-2">
-                    {song.listen && (
-                      <a href={song.listen} target="_blank" rel="noopener noreferrer" className={cardBtn}>
-                        <ExternalLink size={14} /> Video
-                      </a>
-                    )}
-                    {hasChords && (
-                      <button type="button" onClick={() => openSource("chords", song)} className={cardBtn}>
-                        <FileText size={14} /> Chords
-                      </button>
-                    )}
-                    {hasLyrics && (
-                      <button type="button" onClick={() => openSource("lyrics", song)} className={cardBtn}>
-                        <FileText size={14} /> Lyrics
-                      </button>
-                    )}
-                    {song.notes && (
-                      <button type="button" onClick={() => setNotesViewer(song)} className={cardBtn}>
-                        <MessageSquareText size={14} /> Notes
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="flex gap-2 pt-1">
-                    <button
-                      type="button"
-                      onClick={() => requireAuth(() => { setSelectedSong(song); setShowEditModal(true); })}
-                      className={`flex-1 inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-2 text-xs text-[#71717a] ${TX}`}
-                    >
-                      <Pencil size={14} /> Edit
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => requireAuth(() => { setDeleteError(""); setSongToDelete(song); })}
-                      className={`flex-1 inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-2 text-xs text-[#71717a] hover:text-red-400 ${TX}`}
-                    >
-                      <Trash2 size={14} /> Delete
-                    </button>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-        <div className="px-4 py-3 text-[#3f3f46] text-xs border-t border-[#262626]">
-          {filteredSongs.length} {filteredSongs.length === 1 ? "song" : "songs"}
-          {search && ` matching "${search}"`}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          <p className="border-t border-rule px-4 py-3 text-xs text-faint">{countLabel}</p>
         </div>
-      </div>
-
-      {/* Mobile FAB — signed in: opens the actions sheet.
-                        signed out: goes straight to the sign-in modal. */}
-      <button
-        type="button"
-        onClick={() => {
-          if (auth) setShowMobileActions(true);
-          else setShowAuthModal(true);
-        }}
-        aria-label={auth ? "Actions" : "Sign in"}
-        className={`sm:hidden fixed bottom-14 right-4 z-40 w-14 h-14 rounded-full bg-white text-[#0a0a0a] shadow-lg flex items-center justify-center ${TX} active:bg-[#e4e4e7]`}
-      >
-        <Plus size={22} />
-      </button>
-
-      {/* Mobile actions sheet (signed-in only) */}
-      {showMobileActions && (
-        <ModalOverlay onClose={() => setShowMobileActions(false)}>
-          <ModalPanel
-            title="Actions"
-            size="sm"
-            onClose={() => setShowMobileActions(false)}
-          >
-            <div className="px-6 py-5 space-y-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowMobileActions(false);
-                  setLockedSlots({ entrance: false, communion: false, recessional: false });
-                  setShowRepertoireModal(true);
-                  generateRepertoire();
-                }}
-                className={`w-full flex items-center gap-2 rounded-md border border-[#262626] bg-[#0a0a0a] px-4 py-3 text-sm text-white ${TX}`}
-              >
-                <Shuffle size={14} /> Generate lineup
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowMobileActions(false);
-                  setFormData({ ...EMPTY_FORM });
-                  setShowAddModal(true);
-                }}
-                className={`w-full flex items-center gap-2 rounded-md border border-[#262626] bg-[#0a0a0a] px-4 py-3 text-sm text-white ${TX}`}
-              >
-                <Plus size={14} /> Add song
-              </button>
-            </div>
-          </ModalPanel>
-        </ModalOverlay>
-      )}
+      </main>
 
       {/* Footer */}
-      <div className="fixed bottom-0 inset-x-0 z-40 flex justify-center pb-4 pointer-events-none">
-        <p
-          className="text-[11px] text-[#3f3f46] tracking-wide"
-          style={{ fontFamily: "var(--font-playfair), Georgia, serif" }}
-        >
+      <footer className="mx-auto max-w-[1280px] px-4 sm:px-8 pb-10">
+        <p className="text-xs text-faint">
           made by{" "}
           <span
-            className="relative inline-block pointer-events-auto"
+            className="relative inline-block"
             onMouseEnter={() => setShowCredits(true)}
             onMouseLeave={() => setShowCredits(false)}
           >
             {/* Speech bubble — pointer-events-none so it never intercepts clicks
                 on table rows above, and vanishes instantly when the cursor
                 leaves the "john mannully" text. */}
-            <span
-              className={`absolute bottom-full left-1/2 -translate-x-1/2 mb-2.5 w-64 pointer-events-none transition-opacity duration-150 ease-in-out ${showCredits ? "opacity-100" : "opacity-0"}`}
-            >
-              <span className="block bg-[#1a1a1a] border border-[#262626] rounded-md px-3 py-2.5 text-left shadow-lg">
-                <span className="block text-[#a1a1aa] text-[10px] leading-relaxed" style={{ fontFamily: "var(--font-playfair), Georgia, serif", fontStyle: "normal" }}>
-                  ZERO contributions of ANY sort were made by the following individuals:
-                </span>
-                <span className="block mt-1.5 space-y-0.5 text-[10px]" style={{ fontFamily: "var(--font-playfair), Georgia, serif", fontStyle: "normal" }}>
-                  <span className="block text-[#71717a]">
-                    -{" "}
-                    <a href="https://www.linkedin.com/in/anvin-siby-6004a1310/" target="_blank" rel="noopener noreferrer" className={`text-[#a1a1aa] underline underline-offset-2 hover:text-white ${TX}`}>
+            {showCredits && (
+              <span className="anim-overlay absolute bottom-full left-0 mb-2 w-64 pointer-events-none">
+                <span className="block rounded-[14px] bg-raised px-3.5 py-3 text-left shadow-[0_12px_32px_rgba(0,0,0,0.5)]">
+                  <span className="block text-xs leading-5 text-muted">
+                    ZERO contributions of ANY sort were made by the following individuals:
+                  </span>
+                  <span className="mt-1.5 block space-y-0.5 text-xs">
+                    <a href="https://www.linkedin.com/in/anvin-siby-6004a1310/" target="_blank" rel="noopener noreferrer" className="block text-ink underline underline-offset-2">
                       anvin siby
                     </a>
-                  </span>
-                  <span className="block text-[#71717a]">
-                    -{" "}
-                    <a href="https://www.linkedin.com/in/joel-joseph-369399344/" target="_blank" rel="noopener noreferrer" className={`text-[#a1a1aa] underline underline-offset-2 hover:text-white ${TX}`}>
+                    <a href="https://www.linkedin.com/in/joel-joseph-369399344/" target="_blank" rel="noopener noreferrer" className="block text-ink underline underline-offset-2">
                       joel joseph
                     </a>
                   </span>
                 </span>
               </span>
-              <span className="block w-0 h-0 mx-auto border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-[#262626]" />
-            </span>
-            <span
-              className="italic cursor-default"
-              style={{ fontFamily: '"PP Editorial New", "Times New Roman", serif' }}
-            >
-              john mannully
-            </span>
+            )}
+            <span className="cursor-default text-muted">john mannully</span>
           </span>
           {" "}for the SACM youth choir
         </p>
-      </div>
+      </footer>
 
     </div>
   );

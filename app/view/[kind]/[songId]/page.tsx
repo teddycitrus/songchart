@@ -100,14 +100,14 @@ function DocxViewer({
   if (err) {
     return (
       <div className="h-full w-full flex items-center justify-center px-6">
-        <p className="text-[#a1a1aa] text-sm text-center">Could not render file: {err}</p>
+        <p className="text-muted text-sm text-center">Could not render file: {err}</p>
       </div>
     );
   }
   if (html === null) {
     return (
       <div className="h-full w-full flex items-center justify-center">
-        <div className="w-5 h-5 border border-[#3f3f46] border-t-white rounded-full animate-spin" />
+        <div className="w-5 h-5 border-2 border-raised border-t-ink rounded-full animate-spin" />
       </div>
     );
   }
@@ -140,7 +140,7 @@ function DocxViewer({
     <div className="relative h-full w-full">
       <div
         ref={scrollRef}
-        className={`h-full w-full overflow-auto ${darkMode ? "bg-[#0a0a0a]" : "bg-white"}`}
+        className={`h-full w-full overflow-auto ${darkMode ? "bg-ground" : "bg-white"}`}
         onPointerDown={handlePointerDown}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerCancel}
@@ -171,13 +171,13 @@ function DocxViewer({
 
       <div
         data-no-tap
-        className={`absolute bottom-4 right-4 z-10 flex items-center gap-1 rounded-full bg-[#141414] border border-[#262626] shadow-lg px-1.5 py-1 transition-opacity duration-200 ${chromeVisible ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+        className={`absolute bottom-4 right-4 z-10 flex items-center gap-1 rounded-full bg-surface shadow-[0_12px_32px_rgba(0,0,0,0.5)] px-1.5 py-1 transition-opacity duration-200 ${chromeVisible ? "opacity-100" : "opacity-0 pointer-events-none"}`}
       >
         <button
           type="button"
           onClick={() => setZoom(z => clampZoom(z - ZOOM_STEP))}
           disabled={zoom <= 0.001}
-          className={`p-1.5 rounded-full text-white/80 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:hover:bg-transparent ${TX}`}
+          className={`inline-flex h-8 w-8 items-center justify-center rounded-full text-muted hover:text-ink hover:bg-raised disabled:opacity-30 disabled:hover:bg-transparent ${TX}`}
           aria-label="Decrease font size"
         >
           <Minus size={14} />
@@ -189,23 +189,23 @@ function DocxViewer({
           step={ZOOM_STEP}
           value={zoom}
           onChange={e => setZoom(clampZoom(Number(e.target.value)))}
-          className="w-24 accent-white cursor-pointer"
+          className="w-24 accent-[var(--muted)] cursor-pointer"
           aria-label="Font size"
         />
         <button
           type="button"
           onClick={() => setZoom(z => clampZoom(z + ZOOM_STEP))}
           disabled={zoom >= 0.999}
-          className={`p-1.5 rounded-full text-white/80 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:hover:bg-transparent ${TX}`}
+          className={`inline-flex h-8 w-8 items-center justify-center rounded-full text-muted hover:text-ink hover:bg-raised disabled:opacity-30 disabled:hover:bg-transparent ${TX}`}
           aria-label="Increase font size"
         >
           <Plus size={14} />
         </button>
-        <div className="w-px h-4 bg-[#262626] mx-1" />
+        <div className="w-px h-4 bg-raised mx-1" />
         <button
           type="button"
           onClick={() => setDarkMode(d => !d)}
-          className={`p-1.5 rounded-full text-white/80 hover:text-white hover:bg-white/10 ${TX}`}
+          className={`inline-flex h-8 w-8 items-center justify-center rounded-full text-muted hover:text-ink hover:bg-raised ${TX}`}
           aria-label={darkMode ? "Switch to light mode" : "Switch to dark mode"}
           title={darkMode ? "Light mode" : "Dark mode"}
         >
@@ -245,7 +245,7 @@ export default function ViewPage() {
 
   if (!kindIsValid) {
     return (
-      <div className="fixed inset-0 flex items-center justify-center bg-[#0a0a0a] text-[#a1a1aa] text-sm">
+      <div className="fixed inset-0 flex items-center justify-center bg-ground text-muted text-sm">
         Invalid file kind.
       </div>
     );
@@ -253,22 +253,22 @@ export default function ViewPage() {
 
   if (fileInfo === undefined) {
     return (
-      <div className="fixed inset-0 flex items-center justify-center bg-[#0a0a0a]">
-        <div className="w-5 h-5 border border-[#3f3f46] border-t-white rounded-full animate-spin" />
+      <div className="fixed inset-0 flex items-center justify-center bg-ground">
+        <div className="w-5 h-5 border-2 border-raised border-t-ink rounded-full animate-spin" />
       </div>
     );
   }
 
   if (fileInfo === null || !fileUrl) {
     return (
-      <div className="fixed inset-0 flex items-center justify-center bg-[#0a0a0a] text-[#a1a1aa] text-sm">
+      <div className="fixed inset-0 flex items-center justify-center bg-ground text-muted text-sm">
         File not found.
       </div>
     );
   }
 
   return (
-    <div className="fixed inset-0 bg-[#0a0a0a]">
+    <div className="fixed inset-0 bg-ground">
       {/* Viewer fills the whole viewport; the header floats above it so it
           can fade away without reflowing the document. */}
       <div className="absolute inset-0">
@@ -288,21 +288,21 @@ export default function ViewPage() {
       </div>
 
       <div
-        className={`absolute top-0 inset-x-0 z-20 bg-[#0a0a0a] border-b border-white/10 px-4 py-3 flex items-center justify-between transition-opacity duration-200 ${chromeVisible ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+        className={`absolute top-0 inset-x-0 z-20 bg-ground border-b border-line px-4 h-14 flex items-center justify-between transition-opacity duration-200 ${chromeVisible ? "opacity-100" : "opacity-0 pointer-events-none"}`}
       >
         <div className="min-w-0">
-          <p className="text-white text-sm font-medium truncate">{displayName || songId}</p>
-          <p className="text-[#a1a1aa] text-xs truncate">
+          <p className="text-ink text-sm font-medium truncate">{displayName || songId}</p>
+          <p className="text-muted text-xs truncate">
             {label} · {isDocx ? "DOCX" : "PDF"}
           </p>
         </div>
         <button
           type="button"
           onClick={() => window.close()}
-          className={`p-2 rounded-md text-white/70 hover:text-white hover:bg-white/10 ${TX}`}
+          className={`inline-flex h-9 w-9 items-center justify-center rounded-full text-muted hover:text-ink hover:bg-raised ${TX}`}
           aria-label="Close viewer"
         >
-          <X size={18} />
+          <X size={16} />
         </button>
       </div>
     </div>
